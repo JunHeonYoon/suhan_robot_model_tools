@@ -25,7 +25,14 @@ catkin build suhan_robot_model_tools
 
 source ../devel/setup.bash
 echo export PYTHONPATH=\$PYTHONPATH:~/catkin_ws/src/suhan_robot_model_tools >> ~/.bashrc
+```
+```sh
+roslaunch panda_moveit_config demo.launch
+```
+Shut down after open rviz.
 
+```sh
+roscore
 python examples/planning_scene_to_vis_sim.py
 ```
 

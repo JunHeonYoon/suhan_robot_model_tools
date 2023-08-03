@@ -25,6 +25,7 @@ catkin build suhan_robot_model_tools
 
 source ../devel/setup.bash
 echo export PYTHONPATH=\$PYTHONPATH:~/catkin_ws/src/suhan_robot_model_tools >> ~/.bashrc
+source ~/.bashrc
 ```
 ```sh
 roslaunch panda_moveit_config demo.launch

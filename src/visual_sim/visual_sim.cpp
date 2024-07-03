@@ -6,15 +6,15 @@
  * Thanks to the authors for making their code available!
 */
 
-VisualSim::VisualSim()
+VisualSim::VisualSim(int width, int height, double fx, double fy, double z_near, double z_far)
 {
-   // azure
-  cam_props_.width = 512;
-  cam_props_.height = 512;
-  cam_props_.fx = 550.0;
-  cam_props_.fy = 550.0;
-  cam_props_.z_near = 0.25;
-  cam_props_.z_far = 2.88;
+  cam_props_.width = width;
+  cam_props_.height = height;
+  cam_props_.fx = fx;
+  cam_props_.fy = fy;
+  cam_props_.z_near = z_near;
+  cam_props_.z_far = z_far;
+
   cam_props_.cx = cam_props_.width / 2.0;
   cam_props_.cy = cam_props_.height / 2.0;
   sim_ = std::make_shared<gds::SimDepthCamera>(cam_props_);
@@ -141,9 +141,33 @@ CloudXYZPtr VisualSim::generatePointCloud()
   return std::make_shared<CloudXYZ>(cloud);
 }
 
+Eigen::MatrixXd VisualSim::generatePointCloudMatrix()
+{
+  const auto &cloud = generatePointCloud();
+  Eigen::MatrixXd cloud_matrix(cloud->size(), 3);
+  for (int i = 0; i < cloud->size(); ++i)
+  {
+    cloud_matrix.row(i) = cam_pose_ * Eigen::Vector3d{(*cloud)[i].x, 
+                                                      (*cloud)[i].y, 
+                                                      (*cloud)[i].z};
+  }
+  return cloud_matrix;
+}
+
 void VisualSim::setGridResolution(const int n_grid)
 {
   n_grid_ = n_grid;
+  for (int i=0; i<3; ++i)
+  {
+    n_grids_[i] = n_grid;
+  }
+}
+
+void VisualSim::setGridResolutions(const int n_grid_x, const int n_grid_y, const int n_grid_z)
+{
+  n_grids_[0] = n_grid_x;
+  n_grids_[1] = n_grid_y;
+  n_grids_[2] = n_grid_z;
 }
 
 void VisualSim::setSceneBounds(const Eigen::Ref<const Eigen::Vector3d> &scene_bound_min,
@@ -166,7 +190,6 @@ Eigen::VectorXi VisualSim::generateVoxelOccupancy()
     occupancy_min[i] = occupancy_bound_.first[i];
     occupancy_max[i] = occupancy_bound_.second[i]; 
     length_arr_[i] = occupancy_max[i] - occupancy_min[i];
-    n_grids_[i] = n_grid_;
     resolutions_[i] = length_arr_[i] / n_grids_[i];
     
     assert(occupancy_min[i] < occupancy_max[i]);
@@ -175,7 +198,6 @@ Eigen::VectorXi VisualSim::generateVoxelOccupancy()
   voxel_grid.resize(n_grids_[0],n_grids_[1],n_grids_[2]);
   voxel_grid.setZero();
 
-  int cnt_cloud = 0;
   for (const auto &p : *cloud) 
   {
     Eigen::Vector3d global_pos = cam_pose_ * Eigen::Vector3d{p.x, p.y, p.z};
@@ -207,15 +229,15 @@ Eigen::VectorXi VisualSim::generateVoxelOccupancy()
   }
 
   Eigen::VectorXi voxel_vector;
-  voxel_vector.resize(n_grid_ * n_grid_ * n_grid_);
+  voxel_vector.resize(n_grids_[0] * n_grids_[1] * n_grids_[2]);
 
-  for(int i=0; i<n_grid_; i++)
+  for(int i=0; i<n_grids_[0]; i++)
   {
-    for(int j=0; j<n_grid_; j++)
+    for(int j=0; j<n_grids_[1]; j++)
     {
-      for(int k=0; k<n_grid_; k++)
+      for(int k=0; k<n_grids_[2]; k++)
       {
-        voxel_vector[i*n_grid_*n_grid_ + j*n_grid_ + k] = voxel_grid(i, j, k);
+        voxel_vector[i*n_grids_[0]*n_grids_[1] + j*n_grids_[1] + k] = voxel_grid(i, j, k);
       } 
     } 
   }
@@ -223,6 +245,187 @@ Eigen::VectorXi VisualSim::generateVoxelOccupancy()
   return voxel_vector;
 }
 
+
+/**
+ * @brief Generate local voxel occupancy
+ * 
+ * @param point_cloud_matrix (n_points, 3) point cloud matrix (wrt global frame)
+ * @param obj_pose object pose
+ * @param obj_bound_min_vec object bound min vector (with respect to object frame)
+ * @param obj_bound_max_vec object bound max vector (with respect to object frame)
+ * @param n_grids_vec number of grids vector
+ * @param near_distance near distance
+ * @param fill_occluded_voxels  whether to fill occluded voxels
+ * 
+ * @return Eigen::VectorXi Flattened voxel occupancy vector (n_grids_[0] * n_grids_[1] * n_grids_[2])
+ *               2: occluded, 1: occupied, 0: free, -1 or -2: object area (invert of 1 and 2)
+ * 
+*/
+Eigen::VectorXi VisualSim::generateLocalVoxelOccupancy(const Eigen::MatrixXd &point_cloud_matrix, 
+                                                       const Eigen::Isometry3d& obj_pose,
+                                                       const Eigen::Ref<const Eigen::Vector3d> &cam_pos,
+                                                       const Eigen::Ref<const Eigen::Vector3d> &obj_bound_min_vec,
+                                                       const Eigen::Ref<const Eigen::Vector3d> &obj_bound_max_vec,
+                                                       const Eigen::Ref<const Eigen::Vector3d> &n_grids_vec, 
+                                                       double near_distance,
+                                                       bool fill_occluded_voxels)
+{
+  auto &obj_bound_min = obj_bound_min_vec.array();
+  auto &obj_bound_max = obj_bound_max_vec.array();
+  auto &n_grids = n_grids_vec.array().cast<int>();
+
+  Eigen::Array3i obj_bound_idx_min, obj_bound_idx_max;
+  Eigen::Array3d lengths, resolutions, resolutions_inv;
+  Eigen::Array3d local_occu_bounding_coord_min, local_occu_bounding_coord_max;
+
+  local_occu_bounding_coord_min = obj_bound_min - near_distance;
+  local_occu_bounding_coord_max = obj_bound_max + near_distance;
+
+  lengths = local_occu_bounding_coord_max - local_occu_bounding_coord_min;
+  resolutions = lengths / n_grids.cast<double>();
+  resolutions_inv = 1. / resolutions;
+
+  obj_bound_idx_min = ((obj_bound_min - local_occu_bounding_coord_min) * resolutions_inv).cast<int>();
+  obj_bound_idx_max = ((obj_bound_max - local_occu_bounding_coord_min) * resolutions_inv).cast<int>();
+
+  assert((local_occu_bounding_coord_min < local_occu_bounding_coord_max).all());
+
+  voxel_grid.resize(n_grids[0],n_grids[1],n_grids[2]);
+  voxel_grid.setZero();
+
+  Eigen::Array3d obj_camera_point = obj_pose.inverse() * cam_pos;
+  for (int i=0; i<point_cloud_matrix.rows(); ++i) 
+  {
+    Eigen::Vector3d point = point_cloud_matrix.row(i).transpose();
+    Eigen::Array3d obj_point = obj_pose.inverse() * point;
+    
+    bool out_of_bound = true;
+
+    if (obj_point.hasNaN()) continue;
+
+    if ((obj_point < local_occu_bounding_coord_max).all() &&
+        (obj_point > local_occu_bounding_coord_min).all())
+    {
+      out_of_bound = false;
+    }
+
+    if (out_of_bound) continue;
+    
+    Eigen::Array3i indices;
+
+    indices = ((obj_point - local_occu_bounding_coord_min) * resolutions_inv).cast<int>();
+
+    assert((indices < n_grids).all());
+    assert((indices >= 0).all());
+
+    voxel_grid(indices[0],indices[1],indices[2]) = 1;              
+
+    if (fill_occluded_voxels)
+    {
+        Eigen::Vector3d direction = obj_point - obj_camera_point;
+        auto origin = obj_point;
+        
+        direction = direction.normalized(); // normalize vector
+        int    current_key[3];
+        int    step[3];
+        double t_max[3];
+        double t_delta[3];
+
+        for(unsigned int i=0; i < 3; ++i) 
+        {
+          current_key[i] = indices[i];
+
+          // compute step direction
+          if (direction(i) > 0.0)        step[i] =  1;
+          else if (direction(i) < 0.0)   step[i] = -1;
+          else                           step[i] = 0;
+
+          // compute t_max, t_delta
+          if (step[i] != 0) 
+          {
+              double voxel_border = (indices[i] * resolutions[i]) + local_occu_bounding_coord_min[i];
+              voxel_border += (float) (step[i] * resolutions[i] * 0.5);
+
+              t_max[i] = ( voxel_border - origin(i) ) / direction(i);
+              t_delta[i] = resolutions[i] / fabs( direction(i) );
+          }
+          else 
+          {
+              t_max[i] =  std::numeric_limits<double>::max( );
+              t_delta[i] = std::numeric_limits<double>::max( );
+          }
+      }
+
+      bool done = false;
+      while (!done) 
+      {
+        unsigned int dim;
+
+        // find minimum t_max:
+        if (t_max[0] < t_max[1])
+        {
+            if (t_max[0] < t_max[2]) dim = 0;
+            else                     dim = 2;
+        }
+        else 
+        {
+            if (t_max[1] < t_max[2]) dim = 1;
+            else                     dim = 2;
+        }
+
+        current_key[dim] += step[dim];
+        t_max[dim] += t_delta[dim];
+
+        if (current_key[dim] >= n_grids[dim] || current_key[dim] < 0) 
+        {
+          done = true;
+          break;
+        }
+
+        double dist_from_origin = std::min(std::min(t_max[0], t_max[1]), t_max[2]);
+        
+        assert(current_key[0] >= 0);
+        assert(current_key[1] >= 0);
+        assert(current_key[2] >= 0);
+        assert(current_key[0] < n_grids[0]);
+        assert(current_key[1] < n_grids[1]);
+        assert(current_key[2] < n_grids[2]);
+        
+        voxel_grid(current_key[0],current_key[1],current_key[2]) = 2;                
+      } 
+    } // end if of fill_occluded_voxels
+  } // end for (int i=0; i<point_cloud_matrix.rows(); ++i)
+
+  // mark object pose in voxel grid
+  for (int i=obj_bound_idx_min[0]; i<=obj_bound_idx_max[0]; ++i) 
+  {
+    for (int j=obj_bound_idx_min[1]; j<=obj_bound_idx_max[1]; ++j) 
+    {
+      for (int k=obj_bound_idx_min[2]; k<=obj_bound_idx_max[2]; ++k) 
+      {
+        if (voxel_grid(i,j,k) <= 0) continue;
+
+        voxel_grid(i,j,k) = - voxel_grid(i,j,k);
+      }
+    }
+  }
+  // write voxel in vector
+  Eigen::VectorXi voxel_vector;
+  voxel_vector.resize(n_grids[0] * n_grids[1] * n_grids[2]);
+
+  for(int i=0; i<n_grids[0]; i++)
+  {
+    for(int j=0; j<n_grids[1]; j++)
+    {
+      for(int k=0; k<n_grids[2]; k++)
+      {
+        voxel_vector[i*n_grids[0]*n_grids[1] + j*n_grids[1] + k] = voxel_grid(i, j, k);
+      } 
+    } 
+  }
+  
+  return voxel_vector;
+}
 
 Eigen::MatrixXf VisualSim::generateDepthImage()
 {

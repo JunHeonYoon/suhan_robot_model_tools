@@ -6,7 +6,9 @@
 // MoveIt
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/planning_scene/planning_scene.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/kinematic_constraints/utils.h>
+#include <moveit/planning_interface/planning_interface.h>
 
 #include <geometric_shapes/shape_operations.h>
 #include <shape_msgs/Mesh.h>
@@ -24,9 +26,10 @@ if(debug_file_.is_open()) \
 class PlanningSceneCollisionCheck
 {
 public:
-  PlanningSceneCollisionCheck(const std::string & topic_name = "");
+  PlanningSceneCollisionCheck(const std::string & topic_name, const std::string & robot_description_param = "robot_description");
   void setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs);
   bool isValid(const Eigen::Ref<const Eigen::VectorXd> &q) const;
+  bool isCurrentValid() const;
   double clearance(const Eigen::Ref<const Eigen::VectorXd> &q) const;
 
   void updateJoints(const Eigen::Ref<const Eigen::VectorXd> &q);
@@ -57,7 +60,7 @@ public:
   void attachObject(const std::string &object_id, const std::string &link_name, const std::vector<std::string> &touch_links);
   void detachObject(const std::string &object_id, const std::string &link_name);
   void detachAllObjects(const std::string & link_name);
-  void deleteObject(const std::string & object_id);
+  void removeObject(const std::string & object_id);
   // std::vector<std::string> getAttachedObjects(const std::string & link_name);
   std::vector<std::string> getAllAttachedObjects();
   void changeCollision(const std::string &name1, const std::string &name2, bool allowed);
@@ -78,11 +81,16 @@ public:
 
   planning_scene::PlanningScenePtr& getPlanningScene();
 
+  double getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q);
+  Eigen::VectorXd getMinDistanceVector(const Eigen::Ref<const Eigen::VectorXd> &q);
+
 private:
   std::vector<std::pair<std::string,int>> group_infos_;
   // std::array<std::string, 2> move_group_names_ {"panda_left", "panda_right"};
   robot_model::RobotModelPtr robot_model_;
   planning_scene::PlanningScenePtr planning_scene_;
+  planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
+
   ros::NodeHandle nh_;
   ros::Publisher scene_pub_;
   std::string debug_file_prefix_;
@@ -92,4 +100,7 @@ private:
   mutable std::mutex planning_scene_mtx_;
   mutable collision_detection::CollisionResult last_collision_result_;
   // collision_detection::AllowedCollisionMatrixPtr;
+
+
+  std::vector<std::string> link_names_;
 };

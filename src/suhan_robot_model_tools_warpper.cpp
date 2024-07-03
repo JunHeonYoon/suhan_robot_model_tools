@@ -50,6 +50,7 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools_wrapper_cpp)
       .def("get_jacobian_matrix", &TRACIKAdapter::getJacobianMatrix)
       .def("set_bounds", &TRACIKAdapter::setBounds)
       .def("set_tolerance_bounds", &TRACIKAdapter::setToleranceBounds)
+      .def("set_solve_type", &TRACIKAdapter::setSolveType)
       ;
 
   void (ompl::base::Constraint::*jacobian1)(const Eigen::Ref<const Eigen::VectorXd> &x, Eigen::Ref<Eigen::MatrixXd> out) const = &ompl::base::Constraint::jacobian;
@@ -236,11 +237,14 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools_wrapper_cpp)
   void (PlanningSceneCollisionCheck::*updateObjectPose1)(const std::string &id,
               const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat) = &PlanningSceneCollisionCheck::updateObjectPose;
 
-  bp::class_<PlanningSceneCollisionCheck, boost::noncopyable>("PlanningSceneCollisionCheck", bp::init<const std::string&>())
+  bp::class_<PlanningSceneCollisionCheck, boost::noncopyable>("PlanningSceneCollisionCheck", bp::init<const std::string&, const std::string&>())
       .def("set_group_names_and_dofs", &PlanningSceneCollisionCheck::setGroupNamesAndDofs)
       .def("is_valid", &PlanningSceneCollisionCheck::isValid)
+      .def("is_current_valid", &PlanningSceneCollisionCheck::isCurrentValid)
+      .def("set_joint_group_positions", &PlanningSceneCollisionCheck::setJointGroupPositions)
       .def("attach_object", &PlanningSceneCollisionCheck::attachObject)
       .def("detach_object", &PlanningSceneCollisionCheck::detachObject)
+      .def("remove_object", &PlanningSceneCollisionCheck::removeObject)
       .def("publish_planning_scene_msg", &PlanningSceneCollisionCheck::publishPlanningSceneMsg)
       .def("print_current_collision_infos", &PlanningSceneCollisionCheck::printCurrentCollisionInfos)
       .def("update_object_pose", updateObjectPose1)
@@ -253,18 +257,23 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools_wrapper_cpp)
       .def("set_frame_id", &PlanningSceneCollisionCheck::setFrameID)
     //   .def("get_planning_scene", &PlanningSceneCollisionCheck::getPlanningScene)
       .def("get_planning_scene", &PlanningSceneCollisionCheck::getPlanningScene, bp::return_internal_reference<>())
+      .def("get_min_distance", &PlanningSceneCollisionCheck::getMinDistance)
+      .def("get_min_distance_vector", &PlanningSceneCollisionCheck::getMinDistanceVector)
       ;
 
   bp::class_<std::shared_ptr<planning_scene::PlanningScene>, boost::noncopyable>("PlanningScene", bp::no_init);
 
-  bp::class_<VisualSim, boost::noncopyable>("VisualSim")
+  bp::class_<VisualSim, boost::noncopyable>("VisualSim", bp::init<int, int, double, double, double, double>())
       .def("lookat", &VisualSim::lookat)
       .def("set_cam_pose", &VisualSim::setCamPose)
       .def("set_cam_pos", &VisualSim::setCamPos)
       .def("load_scene", &VisualSim::loadScene)
       .def("generate_depth_image", &VisualSim::generateDepthImage)
       .def("generate_voxel_occupancy", &VisualSim::generateVoxelOccupancy)
+      .def("generate_point_cloud_matrix", &VisualSim::generatePointCloudMatrix)
+      .def("generate_local_voxel_occupancy", &VisualSim::generateLocalVoxelOccupancy)
       .def("set_grid_resolution", &VisualSim::setGridResolution)
+      .def("set_grid_resolutions", &VisualSim::setGridResolutions)
       .def("set_scene_bounds", &VisualSim::setSceneBounds)
       ;
 

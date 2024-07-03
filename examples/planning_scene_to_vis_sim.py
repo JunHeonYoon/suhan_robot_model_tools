@@ -1,8 +1,10 @@
+import sys
+sys.path.append('../') 
 from srmt.planning_scene import PlanningScene, VisualSimulator
 
 import numpy as np
 
-pc = PlanningScene(arm_names=['panda_left', 'panda_right', 'panda_top'], dofs=[7,7,7])
+pc = PlanningScene(arm_names=['panda_arm'], arm_dofs=[7], base_link="panda_link0")
 pc.add_box('abcd', [.1,0.1,0.5], [-0.3,-0.1,1.1], [0.0,0.0,0.0,1.0])
 pc.add_box('abcd2', [0.2,0.5,0.1], [0.2,0.1,1.1], [0.0,0.0,0.0,1.0])
 
@@ -12,14 +14,15 @@ vs.load_scene(pc)
 vs.set_cam_and_target_pose(np.array([0.5, 0.0, 2.0]), np.array([0.0, 0.0, 1.0]))
 np.printoptions(precision=3, suppress=True, linewidth=100, threshold=10000)
 depth = vs.generate_depth_image()
+# print(depth.shape)
 
 scene_bound_min = np.array([-1, -1, 0])
 scene_bound_max = np.array([1, 1, 2])
 vs.set_scene_bounds(scene_bound_min, scene_bound_max)
 voxel_grid = vs.generate_voxel_occupancy()
 
-voxel_grid = voxel_grid.reshape(16,16,16)
-print(voxel_grid)
+voxel_grid = voxel_grid.reshape(32,32,32)
+# print(voxel_grid)
 
 import matplotlib.pyplot as plt
 title_font = {
@@ -35,3 +38,8 @@ ax.voxels(voxel_grid)
 ax.set_title("voxel grid", fontsize=16, fontweight='bold', pad=20)
 
 plt.show()
+
+import time
+for i in range(1000):
+    pc.display(np.zeros(7))
+    time.sleep(1.0)

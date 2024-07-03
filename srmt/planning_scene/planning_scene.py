@@ -8,12 +8,87 @@ from srmt.utils import ros_init
 
 # ros_init = False
 
-class PlanningScene(object):
-    def __init__(self, arm_names, arm_dofs, base_link='/base', hand_names=None, hand_joints=[2], hand_open = [[0.0325,0.0325]], hand_closed = [[0.0, 0.0]], topic_name = "/planning_scenes_suhan", q_init = None, base_q=None, start_index=None, end_index=None):
+class PlanningSceneLight(object):
+    def __init__(self, topic_name = "/planning_scene", base_link='/base', robot_description_param='robot_description') -> None:
+        """Planning Scene Light
+        It does not require full group names and joitn dofs
+        """
+        ros_init('PlanningScene')
+
+        self.pc = PlanningSceneCollisionCheck(topic_name, robot_description_param)
+        self.pc.set_frame_id(base_link)
+        
+
+    def update_joints(self, group_name, q):
+        """update whole joints
+
+        Args:
+            group_name (str): group name
+            q (numpy.array of numpy.double): joint values
+        """
+        q = q.astype(np.double)
+        self.pc.set_joint_group_positions(group_name, q)
+
+    def is_current_valid(self) -> bool:
+        """check current state is valid
+
+        Returns:
+            bool: True if valid
+        """
+        return self.pc.is_current_valid()
+    
+    def display(self):
+        self.pc.publish_planning_scene_msg()
+
+    def add_box(self, name, dim, pos, quat):
+        self.pc.add_box(np.array(dim,dtype=np.double),name,
+                        np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
+
+    def add_cylinder(self, name, height, radius, pos, quat):
+        self.pc.add_cylinder(np.array([height, radius],dtype=np.double), name, 
+                             np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
+
+    def add_sphere(self, name, radius, pos, quat):
+        self.pc.add_sphere(radius, name, 
+                           np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
+
+    def add_mesh(self, name, mesh_path, pos, quat):
+        self.pc.add_mesh_from_file(mesh_path, name, 
+                         np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
+
+    def remove_object(self, name):
+        self.pc.remove_object(name)
+        
+    def attach_object(self, object_id, link_name, touch_links=[]):
+        _touch_links = NameVector()
+        
+        for tl in touch_links:
+            _touch_links.append(tl)
+        
+        self.pc.attach_object(object_id, link_name, _touch_links)
+
+    def detach_object(self, object_id, link_name):
+        self.pc.detach_object(object_id, link_name)
+
+    def update_object_pose(self, object_id, pos, quat):
+        self.pc.update_object_pose(object_id, np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
+
+    def print_current_collision_infos(self):
+        self.pc.print_current_collision_infos()
+
+    def display(self, group_name=None, q=None):
+        if q is not None and group_name is not None:
+            self.update_joints(group_name, q)
+
+        self.pc.publish_planning_scene_msg()
+
+
+class PlanningScene(PlanningSceneLight):
+    def __init__(self, arm_names, arm_dofs, base_link='/base', hand_names=None, hand_joints=[2], hand_open = [[0.0325,0.0325]], hand_closed = [[0.0, 0.0]], topic_name = "/planning_scene", robot_description_param='robot_description', q_init = None, base_q=None, start_index=None, end_index=None):
         
         ros_init('PlanningScene')
 
-        self.pc = PlanningSceneCollisionCheck(topic_name)
+        self.pc = PlanningSceneCollisionCheck(topic_name, robot_description_param)
         
         self.base_q = base_q
         self.start_index = start_index
@@ -34,6 +109,7 @@ class PlanningScene(object):
             dofs_vec.append(dof)
             self.name_to_indices[name] = (current_idx, current_idx+dof)
             current_idx += dof
+
 
         self.hand_open = np.array(hand_open, dtype=np.double)
         self.hand_closed = np.array(hand_closed, dtype=np.double)
@@ -61,6 +137,9 @@ class PlanningScene(object):
     def set_planning_joint_group(self, name):
         self.set_planning_joint_index(*self.name_to_indices[name])
         
+    def get_joint_start_end_index(self, name):
+        return self.name_to_indices[name]
+    
     def set_planning_joint_index(self, start_index, end_index):
         self.start_index = start_index
         self.end_index = end_index
@@ -76,9 +155,17 @@ class PlanningScene(object):
         return q
 
     def update_joints(self, q):
+        """update whole joints
+
+        Args:
+            q (np.array float): full configurations
+        """
+
         q = q.astype(np.double)
         q = self.add_gripper_to_q(q)
         self.pc.update_joints(q)
+        if self.base_q is not None:
+            self.base_q = copy.deepcopy(q)
 
     def display(self, q=None):
         if q is not None:
@@ -100,12 +187,14 @@ class PlanningScene(object):
         q = q.astype(np.double)
 
         if self.base_q is not None:
-            self.base_q[self.start_index:self.end_index] = q
-            q = self.base_q
+            q_full = copy.deepcopy(self.base_q)
+            q_full[self.start_index:self.end_index] = q
+            q = q_full
             
         q = self.add_gripper_to_q(q)
         return self.pc.is_valid(q)
 
+<<<<<<< HEAD
     def add_box(self, name, dim, pos, quat):
         self.pc.add_box(np.array(dim,dtype=np.double),name,
                         np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
@@ -138,3 +227,15 @@ class PlanningScene(object):
 
     def print_current_collision_infos(self):
         self.pc.print_current_collision_infos()
+
+    def min_distance(self, q):
+        self.update_joints(q)
+        min_dist = self.pc.get_min_distance(q)
+        return min_dist 
+    
+    def min_distance_vector(self, q):
+        self.update_joints(q)
+        min_dist = np.array(self.pc.get_min_distance_vector(q))
+        return min_dist 
+=======
+>>>>>>> 3f35004ccbb7e9221813e2c78626170ed36a1cb0

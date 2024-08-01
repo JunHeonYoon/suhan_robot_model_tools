@@ -535,7 +535,7 @@ void PlanningSceneCollisionCheck::printCurrentCollisionInfos()
 std::stringstream PlanningSceneCollisionCheck::streamCurrentCollisionInfos()
 {
   collision_detection::CollisionRequest collision_request;
-  collision_detection::CollisionResult collision_result;
+  collision_detection::CollisionResult collision_result1, collision_result2, collision_result3;
   {
   std::scoped_lock _lock(planning_scene_mtx_);
   
@@ -543,21 +543,53 @@ std::stringstream PlanningSceneCollisionCheck::streamCurrentCollisionInfos()
   robot_state::RobotState current_state = planning_scene_->getCurrentState();
   
   collision_request.contacts = true;
-  collision_request.distance = false;
+  collision_request.distance = true;
   collision_request.verbose = false;
   collision_request.max_contacts = 1000;
   collision_request.max_contacts_per_pair = 1000;
-  planning_scene_->checkCollision(collision_request, collision_result, current_state);
+  planning_scene_->checkCollision(collision_request, collision_result1, current_state, true, false);
   planning_scene_monitor_->unlockSceneRead();
   }
   std::stringstream ss;
-  ss << "===================================\n ";
-  ss << " > Current collision status: " << collision_result.collision << std::endl;
-  for (auto & contact : collision_result.contacts)
+  ss << "===================================\n";
+  ss << " > Only for self-collision " << std::endl;
+  ss << " \t> Current collision status: " << collision_result1.collision << std::endl;
+  for (auto & contact : collision_result1.contacts)
   {
-    ss << "    > Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
+    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
   }
-  ss << "===================================\n ";
+  ss << " \t> Distance : " << collision_result1.distance << std::endl;
+  {
+  std::scoped_lock _lock(planning_scene_mtx_);
+  
+  planning_scene_monitor_->lockSceneRead();
+  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  planning_scene_->checkCollision(collision_request, collision_result2, current_state, false, true);
+  planning_scene_monitor_->unlockSceneRead();
+  }
+  ss << " > Only for env-collision " << std::endl;
+  ss << " \t> Current collision status: " << collision_result2.collision << std::endl;
+  for (auto & contact : collision_result2.contacts)
+  {
+    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
+  }
+  ss << " \t> Distance : " << collision_result2.distance << std::endl;
+  {
+  std::scoped_lock _lock(planning_scene_mtx_);
+  
+  planning_scene_monitor_->lockSceneRead();
+  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  planning_scene_->checkCollision(collision_request, collision_result3, current_state, true, true);
+  planning_scene_monitor_->unlockSceneRead();
+  }
+  ss << " > Both for self/env-collision " << std::endl;
+  ss << " \t> Current collision status: " << collision_result3.collision << std::endl;
+  for (auto & contact : collision_result3.contacts)
+  {
+    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
+  }
+  ss << " \t> Distance : " << collision_result3.distance << std::endl;
+  ss << "===================================\n";
   return ss;
 }
 
@@ -565,12 +597,14 @@ planning_scene::PlanningScenePtr& PlanningSceneCollisionCheck::getPlanningScene(
 {
   return planning_scene_;
 }
-double PlanningSceneCollisionCheck::getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q)
+double PlanningSceneCollisionCheck::getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q, const bool is_self, const bool is_env)
 {
   collision_detection::CollisionRequest collision_request;
   collision_detection::CollisionResult collision_result;
   {
   std::scoped_lock _lock(planning_scene_mtx_);
+
+  planning_scene_monitor_->lockSceneRead();
   robot_state::RobotState current_state = planning_scene_->getCurrentState();
   
   collision_request.contacts = true;
@@ -578,7 +612,8 @@ double PlanningSceneCollisionCheck::getMinDistance(const Eigen::Ref<const Eigen:
   collision_request.verbose = false;
   collision_request.max_contacts = 1000;
   collision_request.max_contacts_per_pair = 1000;
-  planning_scene_->checkCollision(collision_request, collision_result, current_state);
+  planning_scene_->checkCollision(collision_request, collision_result, current_state, is_self, is_env);
+  planning_scene_monitor_->unlockSceneRead();
   }
   return collision_result.distance;
 }

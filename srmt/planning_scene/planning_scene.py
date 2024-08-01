@@ -194,7 +194,6 @@ class PlanningScene(PlanningSceneLight):
         q = self.add_gripper_to_q(q)
         return self.pc.is_valid(q)
 
-<<<<<<< HEAD
     def add_box(self, name, dim, pos, quat):
         self.pc.add_box(np.array(dim,dtype=np.double),name,
                         np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
@@ -228,14 +227,12 @@ class PlanningScene(PlanningSceneLight):
     def print_current_collision_infos(self):
         self.pc.print_current_collision_infos()
 
-    def min_distance(self, q):
+    def min_distance(self, q, is_self=True, is_env=True):
         self.update_joints(q)
-        min_dist = self.pc.get_min_distance(q)
+        min_dist = self.pc.get_min_distance(q, is_self, is_env)
         return min_dist 
     
     def min_distance_vector(self, q):
         self.update_joints(q)
         min_dist = np.array(self.pc.get_min_distance_vector(q))
         return min_dist 
-=======
->>>>>>> 3f35004ccbb7e9221813e2c78626170ed36a1cb0

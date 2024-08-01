@@ -81,7 +81,7 @@ public:
 
   planning_scene::PlanningScenePtr& getPlanningScene();
 
-  double getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q);
+  double getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q, const bool is_self, const bool is_env);
   Eigen::VectorXd getMinDistanceVector(const Eigen::Ref<const Eigen::VectorXd> &q);
 
 private:

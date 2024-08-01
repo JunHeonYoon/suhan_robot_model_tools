@@ -7,6 +7,7 @@ import numpy as np
 
 class VisualSimulator(object):
     def __init__(self, width=512, height=512, focal_length_x=550.0, focal_length_y=550.0, z_near=0.25, z_far=2.88) -> None:
+        self.n_grids = np.array([32,32,32])
         self.vs = VisualSim(width, height, focal_length_x, focal_length_y, z_near, z_far)
 
     def load_scene(self, planning_scene : PlanningSceneLight):
@@ -34,7 +35,10 @@ class VisualSimulator(object):
         return self.vs.generate_depth_image()
     
     def generate_voxel_occupancy(self):
-        return self.vs.generate_voxel_occupancy()
+        voxel_vec = self.vs.generate_voxel_occupancy()
+        return voxel_vec.reshape(int(self.n_grids[0]),
+                                 int(self.n_grids[1]),
+                                 int(self.n_grids[2]))
 
     def generate_point_cloud_matrix(self):
         """
@@ -74,4 +78,11 @@ class VisualSimulator(object):
         return self.vs.set_scene_bounds(scene_bound_min, scene_bound_max)
 
     def set_grid_resolution(self, n_grid):
+        self.n_grids = np.array([n_grid,n_grid,n_grid], dtype=int)
         return self.vs.set_grid_resolution(n_grid)
+    
+    def set_grid_resolutions(self, n_grids):
+        self.n_grids = np.round(n_grids)
+        return self.vs.set_grid_resolutions(int(self.n_grids[0]),
+                                            int(self.n_grids[1]),
+                                            int(self.n_grids[2]))

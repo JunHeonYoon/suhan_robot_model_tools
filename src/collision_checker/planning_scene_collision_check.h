@@ -1,17 +1,15 @@
 #pragma once
 
 #include <mutex>
-#include <ros/ros.h>
 
 // MoveIt
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/kinematic_constraints/utils.h>
-#include <moveit/planning_interface/planning_interface.h>
 
 #include <geometric_shapes/shape_operations.h>
-#include <shape_msgs/Mesh.h>
+#include <shape_msgs/msg/mesh.hpp>
 #include <fstream>
 
 #include <Eigen/Dense>
@@ -26,49 +24,48 @@ if(debug_file_.is_open()) \
 class PlanningSceneCollisionCheck
 {
 public:
-  PlanningSceneCollisionCheck(const std::string & topic_name, const std::string & robot_description_param = "robot_description");
+  PlanningSceneCollisionCheck(const std::string & param_node_name, const std::string & node_name, const std::string & topic_name, const std::string & robot_description_param = "robot_description");
   void setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs);
   bool isValid(const Eigen::Ref<const Eigen::VectorXd> &q) const;
   bool isCurrentValid() const;
   double clearance(const Eigen::Ref<const Eigen::VectorXd> &q) const;
 
   void updateJoints(const Eigen::Ref<const Eigen::VectorXd> &q);
-  geometry_msgs::Pose convertEigenToPose(const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
+  geometry_msgs::msg::Pose convertEigenToPose(const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
   void addMeshFromFile(const std::string & file_name, const std::string &id, 
                        const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
 
-  void addMeshFromFile(const std::string & file_name, geometry_msgs::Pose pose, const std::string &id);
-  void updateObjectPose(geometry_msgs::Pose pose, const std::string &id);
+  void addMeshFromFile(const std::string & file_name, geometry_msgs::msg::Pose pose, const std::string &id);
+  void updateObjectPose(geometry_msgs::msg::Pose pose, const std::string &id);
   Eigen::Isometry3d getObjectPose(const std::string &id) const;
   void updateObjectPose(const std::string &id, const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
 
   void addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, const std::string &id,
               const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
 
-  void addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, geometry_msgs::Pose pose, const std::string &id);
+  void addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, geometry_msgs::msg::Pose pose, const std::string &id);
 
   void addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, const std::string &id,
               const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
 
-  void addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, geometry_msgs::Pose pose, const std::string &id);
+  void addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, geometry_msgs::msg::Pose pose, const std::string &id);
 
   void addSphere(const double &dim, const std::string &id,
               const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat);
 
-  void addSphere(const double &dim, geometry_msgs::Pose pose, const std::string &id);
+  void addSphere(const double &dim, geometry_msgs::msg::Pose pose, const std::string &id);
   
   void attachObject(const std::string &object_id, const std::string &link_name, const std::vector<std::string> &touch_links);
   void detachObject(const std::string &object_id, const std::string &link_name);
   void detachAllObjects(const std::string & link_name);
   void removeObject(const std::string & object_id);
-  // std::vector<std::string> getAttachedObjects(const std::string & link_name);
   std::vector<std::string> getAllAttachedObjects();
   void changeCollision(const std::string &name1, const std::string &name2, bool allowed);
   void changeCollisions(const std::string &name1, const std::vector< std::string > &other_names, bool allowed);
   void changeCollisionsAll(const std::string &name1, bool allowed);
-  Eigen::Isometry3d geometry_pose_to_isometry(geometry_msgs::Pose geometry_pose);
+  Eigen::Isometry3d geometry_pose_to_isometry(geometry_msgs::msg::Pose geometry_pose);
 
-  moveit_msgs::PlanningScene getPlanningSceneMsg();
+  moveit_msgs::msg::PlanningScene getPlanningSceneMsg();
   void publishPlanningSceneMsg();
 
   void printCurrentCollisionInfos();
@@ -81,26 +78,18 @@ public:
 
   planning_scene::PlanningScenePtr& getPlanningScene();
 
-  double getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q, const bool is_self, const bool is_env);
-  Eigen::VectorXd getMinDistanceVector(const Eigen::Ref<const Eigen::VectorXd> &q);
-
 private:
   std::vector<std::pair<std::string,int>> group_infos_;
-  // std::array<std::string, 2> move_group_names_ {"panda_left", "panda_right"};
-  robot_model::RobotModelPtr robot_model_;
+  moveit::core::RobotModelPtr robot_model_;
   planning_scene::PlanningScenePtr planning_scene_;
   planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
 
-  ros::NodeHandle nh_;
-  ros::Publisher scene_pub_;
+  rclcpp::Node::SharedPtr node_;
+  rclcpp::Publisher<moveit_msgs::msg::PlanningScene>::SharedPtr scene_pub_;
   std::string debug_file_prefix_;
   std::ofstream debug_file_;
   std::string obs_frame_id_;
 
   mutable std::mutex planning_scene_mtx_;
   mutable collision_detection::CollisionResult last_collision_result_;
-  // collision_detection::AllowedCollisionMatrixPtr;
-
-
-  std::vector<std::string> link_names_;
 };

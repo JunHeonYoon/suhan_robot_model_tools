@@ -1,5 +1,5 @@
-# Suhan Robot Model Tools
-Robot model tools for motion planning
+# Suhan Robot Model Tools2
+Robot model tools for motion planning on ROS2
 
 ## Features
 - Collision checker (MoveIt planning scene)

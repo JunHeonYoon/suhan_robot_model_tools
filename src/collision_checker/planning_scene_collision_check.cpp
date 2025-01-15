@@ -1,20 +1,46 @@
 #include "collision_checker/planning_scene_collision_check.h"
 
-// TODO: make it load urdf and srdf 
-// robot_model_loader::RobotModelLoader robot_model_loader("urdf", "srdf");
-
-PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string & topic_name, const std::string & robot_description_param)
+PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string & param_node_name, const std::string & node_name, const std::string & topic_name, const std::string & robot_description_param)
 {
-  robot_model_loader::RobotModelLoader robot_model_loader(robot_description_param, false);
+  if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+  node_ = std::make_shared<rclcpp::Node>(node_name);
+
+  auto client = std::make_shared<rclcpp::SyncParametersClient>(node_, param_node_name);
+  if (!client->wait_for_service(std::chrono::seconds(5))) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to connect to parameter server in %s.",param_node_name);
+      return;
+  }
+  std::string robot_description;
+  std::string robot_description_semantic;
+  try {
+      robot_description = client->get_parameter<std::string>("robot_description");
+  } catch (const std::exception & e) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description: %s", e.what());
+      return;
+  }
+  try {
+      robot_description_semantic = client->get_parameter<std::string>("robot_description_semantic");
+  } catch (const std::exception & e) {
+      RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description_semantic: %s", e.what());
+      return;
+  }
+
+  node_->declare_parameter<std::string>("robot_description", "");
+  node_->set_parameter(rclcpp::Parameter("robot_description", robot_description));
+  node_->declare_parameter<std::string>("robot_description_semantic", "");
+  node_->set_parameter(rclcpp::Parameter("robot_description_semantic", robot_description_semantic));
+
+
+
+  robot_model_loader::RobotModelLoader robot_model_loader(node_, robot_description_param, false);
   robot_model_ = robot_model_loader.getModel();
   planning_scene_ = std::make_shared<planning_scene::PlanningScene> (robot_model_);
-  planning_scene_->setName("srmt planning scene");
-  scene_pub_ = nh_.advertise<moveit_msgs::PlanningScene>(topic_name, 1);
-  planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(planning_scene_, robot_description_param);
+  planning_scene_->setName("srmt2 planning scene");
+  scene_pub_ = node_->create_publisher<moveit_msgs::msg::PlanningScene>(topic_name, 1);
+  planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(node_, planning_scene_, robot_description_param);
   planning_scene_monitor_->providePlanningSceneService();
   planning_scene_monitor_->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE, topic_name);
   planning_scene_monitor_->startSceneMonitor(topic_name);
-  // acm_ = std::make_shared<collision_detection::AllowedCollisionMatrix>(planning_scene_->getAllowedCollisionMatrix());
 };
 
 void PlanningSceneCollisionCheck::setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs)
@@ -24,29 +50,23 @@ void PlanningSceneCollisionCheck::setGroupNamesAndDofs(const std::vector<std::st
   int len_groups = arm_name.size();
   group_infos_.resize(len_groups);
 
-
   for (int i=0; i<len_groups; ++i)
   {
     group_infos_[i].first = arm_name[i];
     group_infos_[i].second = dofs[i];
   }
-  link_names_ = robot_model_->getLinkModelNamesWithCollisionGeometry();
-  // std::cout<<link_names_.size()<<std::endl;
-  // for(std::size_t i = 0; i < link_names_.size(); ++i)
-  // {
-  //   std::cout<<link_names_[i]<<std::endl;
-  // }
+
 }
 
 bool PlanningSceneCollisionCheck::isValid(const Eigen::Ref<const Eigen::VectorXd> &q) const
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneRead();
+  planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
+  
   collision_detection::CollisionRequest collision_request;
   collision_detection::CollisionResult collision_result;
   collision_request.contacts = true;
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  moveit::core::RobotState current_state = planning_scene_->getCurrentState();
   
   int current_seg_index = 0;
   for (auto & group_info : group_infos_)
@@ -54,26 +74,13 @@ bool PlanningSceneCollisionCheck::isValid(const Eigen::Ref<const Eigen::VectorXd
     int dof = group_info.second;
     const auto & q_seg = q.segment(current_seg_index, dof);
     const std::vector<double> joint_values(q_seg.data(), q_seg.data() + dof);
-    const robot_model::JointModelGroup* joint_model_group = current_state.getJointModelGroup(group_info.first);
+    const moveit::core::JointModelGroup* joint_model_group = current_state.getJointModelGroup(group_info.first);
     current_state.setJointGroupPositions(joint_model_group, joint_values);
     current_seg_index += dof;
   }
-  // for (int i=0; i<arm_name_.size(); i++)
-  // {
-  //   const auto & q_seg = q.segment<7>(i*7);
-  //   const std::vector<double> joint_values(q_seg.data(), q_seg.data() + 7);
-  //   const robot_model::JointModelGroup* joint_model_group = current_state.getJointModelGroup(arm_name_[i]);
-  //   current_state.setJointGroupPositions(joint_model_group, joint_values);
-  // }
   planning_scene_->checkCollision(collision_request, collision_result, current_state);
-  
-  planning_scene_monitor_->unlockSceneRead();
 
   last_collision_result_ = collision_result; 
-  // DEBUG_FILE("q: " << q.transpose());
-  // DEBUG_FILE("validity: " << !collision_result.collision);
-  // collision_result->
-  // planning_scene_->checkCollision()
 
   return !collision_result.collision;
 }
@@ -81,16 +88,14 @@ bool PlanningSceneCollisionCheck::isValid(const Eigen::Ref<const Eigen::VectorXd
 bool PlanningSceneCollisionCheck::isCurrentValid() const
 {
   std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
 
-  planning_scene_monitor_->lockSceneRead();
   collision_detection::CollisionRequest collision_request;
   collision_detection::CollisionResult collision_result;
   collision_request.contacts = true;
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  moveit::core::RobotState current_state = planning_scene_->getCurrentState();
   
   planning_scene_->checkCollision(collision_request, collision_result, current_state);
-
-  planning_scene_monitor_->unlockSceneRead();
 
   last_collision_result_ = collision_result; 
   
@@ -100,23 +105,22 @@ bool PlanningSceneCollisionCheck::isCurrentValid() const
 void PlanningSceneCollisionCheck::setJointGroupPositions(const std::string& name, const Eigen::Ref<const Eigen::VectorXd> &q)
 {
   std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRW lscene(planning_scene_monitor_);
 
-  planning_scene_monitor_->lockSceneWrite();
-  robot_state::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
+  moveit::core::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
   current_state.setJointGroupPositions(name, q);
-  planning_scene_monitor_->unlockSceneWrite();
 }
 
 double PlanningSceneCollisionCheck::clearance(const Eigen::Ref<const Eigen::VectorXd> &q) const
 {
   std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
 
-  planning_scene_monitor_->lockSceneRead();
   collision_detection::CollisionRequest collision_request;
   collision_detection::CollisionResult collision_result;
   collision_request.contacts = true;
   collision_request.distance = true;
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  moveit::core::RobotState current_state = planning_scene_->getCurrentState();
 
   int current_seg_index = 0;
   for (auto & group_info : group_infos_)
@@ -124,21 +128,12 @@ double PlanningSceneCollisionCheck::clearance(const Eigen::Ref<const Eigen::Vect
     int dof = group_info.second;
     const auto & q_seg = q.segment(current_seg_index, dof);
     const std::vector<double> joint_values(q_seg.data(), q_seg.data() + dof);
-    const robot_model::JointModelGroup* joint_model_group = current_state.getJointModelGroup(group_info.first);
+    const moveit::core::JointModelGroup* joint_model_group = current_state.getJointModelGroup(group_info.first);
     current_state.setJointGroupPositions(joint_model_group, joint_values);
     current_seg_index += dof;
   }
 
-  // for (int i=0; i<arm_name_.size(); i++)
-  // {
-  //   const auto & q_seg = q.segment<7>(i*7);
-  //   const std::vector<double> joint_values(q_seg.data(), q_seg.data() + 7);
-  //   const robot_model::JointModelGroup* joint_model_group = current_state.getJointModelGroup(arm_name_[i]);
-  //   current_state.setJointGroupPositions(joint_model_group, joint_values);
-  // }
   planning_scene_->checkCollision(collision_request, collision_result, current_state);
-
-  planning_scene_monitor_->unlockSceneRead();
 
   last_collision_result_ = collision_result; 
   
@@ -153,10 +148,9 @@ double PlanningSceneCollisionCheck::clearance(const Eigen::Ref<const Eigen::Vect
 void PlanningSceneCollisionCheck::updateJoints(const Eigen::Ref<const Eigen::VectorXd> &q)
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-  // std::cout << "void updateJoints(const Eigen::Ref<const Eigen::VectorXd> &q)" << std::endl;
+  planning_scene_monitor::LockedPlanningSceneRW lscene(planning_scene_monitor_);
 
-  planning_scene_monitor_->lockSceneWrite();
-  robot_state::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
+  moveit::core::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
 
   int current_seg_index = 0;
   for (auto & group_info : group_infos_)
@@ -167,23 +161,11 @@ void PlanningSceneCollisionCheck::updateJoints(const Eigen::Ref<const Eigen::Vec
     current_seg_index += dof;
   }
 
-  planning_scene_monitor_->unlockSceneWrite();
-
-  // for (int i=0; i<arm_name_.size(); i++)
-  // {
-  //   Eigen::Matrix<double, 7, 1> q_seg = q.segment<7>(i*7);
-  //   // std::vector<double> joint_values(q_seg.data(), q_seg.data() + 7);
-  //   // const robot_model::JointModelGroup* joint_model_group = current_state.getJointModelGroup(arm_name_[i]);
-  //   // current_state.setJointGroupPositions(joint_model_group, joint_values);
-  //   // std::cout << arm_name_[i] << ": " << q_seg.transpose() << std::endl;
-  //   current_state.setJointGroupPositions(arm_name_[i], q_seg);
-  // };
-  // planning_scene_->setCurrentState(current_state);
 }
 
-geometry_msgs::Pose PlanningSceneCollisionCheck::convertEigenToPose(const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
+geometry_msgs::msg::Pose PlanningSceneCollisionCheck::convertEigenToPose(const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose.position.x = pos(0);
   pose.position.y = pos(1);
   pose.position.z = pos(2);
@@ -196,42 +178,38 @@ geometry_msgs::Pose PlanningSceneCollisionCheck::convertEigenToPose(const Eigen:
 void PlanningSceneCollisionCheck::addMeshFromFile(const std::string & file_name, const std::string &id, 
                       const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose = convertEigenToPose(pos, quat);
   addMeshFromFile(file_name, pose, id);
 }
 
-void PlanningSceneCollisionCheck::addMeshFromFile(const std::string & file_name, geometry_msgs::Pose pose, const std::string &id)
+void PlanningSceneCollisionCheck::addMeshFromFile(const std::string & file_name, geometry_msgs::msg::Pose pose, const std::string &id)
 {
   shapes::Mesh *mesh = shapes::createMeshFromResource(file_name);
   shapes::ShapeMsg shape_msg;
   shapes::constructMsgFromShape(mesh, shape_msg);
 
-  shape_msgs::Mesh shape_msgs_mesh = boost::get<shape_msgs::Mesh>(shape_msg);
+  shape_msgs::msg::Mesh shape_msgs_mesh = boost::get<shape_msgs::msg::Mesh>(shape_msg);
 
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
-  geometry_msgs::Pose empty_pose;
+  geometry_msgs::msg::Pose empty_pose;
   empty_pose.orientation.w = 1.0;
   co.meshes.push_back(shape_msgs_mesh);
   co.mesh_poses.push_back(empty_pose);
   co.pose = pose;
-  co.operation = moveit_msgs::CollisionObject::ADD;
+  co.operation = moveit_msgs::msg::CollisionObject::ADD;
 
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
+}
 }
 
-}
-
-void PlanningSceneCollisionCheck::updateObjectPose(geometry_msgs::Pose pose, const std::string &id)
+void PlanningSceneCollisionCheck::updateObjectPose(geometry_msgs::msg::Pose pose, const std::string &id)
 {
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
 #if ROS_VERSION_MINOR <= 14
@@ -239,20 +217,17 @@ void PlanningSceneCollisionCheck::updateObjectPose(geometry_msgs::Pose pose, con
 #else // >= 15
   co.pose = pose;
 #endif
-  co.operation = moveit_msgs::CollisionObject::MOVE;
+  co.operation = moveit_msgs::msg::CollisionObject::MOVE;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
 }
 }
 
 void PlanningSceneCollisionCheck::updateObjectPose(const std::string &id, const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose = convertEigenToPose(pos, quat);
   updateObjectPose(pose, id);
 }
@@ -267,191 +242,160 @@ Eigen::Isometry3d PlanningSceneCollisionCheck::getObjectPose(const std::string &
 void PlanningSceneCollisionCheck::addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, const std::string &id,
             const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose = convertEigenToPose(pos, quat);
   addBox(dim, pose, id);
-  // planning_scene_->getAllowedCollisionMatrixNonConst().setEntry('hand', id);
 }
 
-void PlanningSceneCollisionCheck::addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, geometry_msgs::Pose pose, const std::string &id)
+void PlanningSceneCollisionCheck::addBox(const Eigen::Ref<const Eigen::Vector3d> &dim, geometry_msgs::msg::Pose pose, const std::string &id)
 {
-  shape_msgs::SolidPrimitive primitive;
+  shape_msgs::msg::SolidPrimitive primitive;
   primitive.type = primitive.BOX;
   primitive.dimensions.resize(3);
   primitive.dimensions[0] = dim(0);
   primitive.dimensions[1] = dim(1);
   primitive.dimensions[2] = dim(2);
 
-  geometry_msgs::Pose empty_pose;
+  geometry_msgs::msg::Pose empty_pose;
   empty_pose.orientation.w = 1.0;
 
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
   co.primitives.push_back(primitive);
   co.primitive_poses.push_back(empty_pose);
   co.pose = pose;
-  co.operation = moveit_msgs::CollisionObject::ADD;
+  co.operation = moveit_msgs::msg::CollisionObject::ADD;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
 }
-  // ROS_INFO("ADD BOX!!");
-  // planning_scene_->getAllowedCollisionMatrixNonConst().setEntry('hand', id);
 }
 
 void PlanningSceneCollisionCheck::addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, const std::string &id,
             const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose = convertEigenToPose(pos, quat);
   addCylinder(dim, pose, id);
-  // planning_scene_->getAllowedCollisionMatrixNonConst().setEntry('hand', id);
 }
 
-void PlanningSceneCollisionCheck::addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, geometry_msgs::Pose pose, const std::string &id)
+void PlanningSceneCollisionCheck::addCylinder(const Eigen::Ref<const Eigen::Vector2d> &dim, geometry_msgs::msg::Pose pose, const std::string &id)
 {
-  shape_msgs::SolidPrimitive primitive;
+  shape_msgs::msg::SolidPrimitive primitive;
   primitive.type = primitive.CYLINDER;
   primitive.dimensions.resize(2);
-  primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] = dim(0);
-  primitive.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] = dim(1);
+  primitive.dimensions[shape_msgs::msg::SolidPrimitive::CYLINDER_HEIGHT] = dim(0);
+  primitive.dimensions[shape_msgs::msg::SolidPrimitive::CYLINDER_RADIUS] = dim(1);
 
-  geometry_msgs::Pose empty_pose;
+  geometry_msgs::msg::Pose empty_pose;
   empty_pose.orientation.w = 1.0;
 
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
   co.primitives.push_back(primitive);
   co.primitive_poses.push_back(empty_pose);
   co.pose = pose;
-  co.operation = moveit_msgs::CollisionObject::ADD;
+  co.operation = moveit_msgs::msg::CollisionObject::ADD;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
 }
-  // ROS_INFO("ADD BOX!!");
-  // planning_scene_->getAllowedCollisionMatrixNonConst().setEntry('hand', id);
 }
 
 void PlanningSceneCollisionCheck::addSphere(const double &dim, const std::string &id,
             const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
 {
-  geometry_msgs::Pose pose;
+  geometry_msgs::msg::Pose pose;
   pose = convertEigenToPose(pos, quat);
   addSphere(dim, pose, id);
 }
 
-void PlanningSceneCollisionCheck::addSphere(const double &dim, geometry_msgs::Pose pose, const std::string &id)
+void PlanningSceneCollisionCheck::addSphere(const double &dim, geometry_msgs::msg::Pose pose, const std::string &id)
 {
-  shape_msgs::SolidPrimitive primitive;
+  shape_msgs::msg::SolidPrimitive primitive;
   primitive.type = primitive.SPHERE;
   primitive.dimensions.resize(1);
-  primitive.dimensions[shape_msgs::SolidPrimitive::SPHERE_RADIUS] = dim;
+  primitive.dimensions[shape_msgs::msg::SolidPrimitive::SPHERE_RADIUS] = dim;
 
-  geometry_msgs::Pose empty_pose;
+  geometry_msgs::msg::Pose empty_pose;
   empty_pose.orientation.w = 1.0;
 
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
   co.primitives.push_back(primitive);
   co.primitive_poses.push_back(empty_pose);
   co.pose = pose;
-  co.operation = moveit_msgs::CollisionObject::ADD;
+  co.operation = moveit_msgs::msg::CollisionObject::ADD;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
 }
 }
 
 void PlanningSceneCollisionCheck::attachObject(const std::string &object_id, const std::string &link_name, const std::vector<std::string> &touch_links)
 {
-  moveit_msgs::AttachedCollisionObject aco;
+  moveit_msgs::msg::AttachedCollisionObject aco;
   aco.object.id = object_id;
-  aco.object.operation = moveit_msgs::CollisionObject::ADD;
+  aco.object.operation = moveit_msgs::msg::CollisionObject::ADD;
   aco.object.pose.orientation.w = 1.0;
   aco.link_name = link_name;
   aco.touch_links = touch_links;
 
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processAttachedCollisionObjectMsg(aco);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processAttachedCollisionObjectMsg(aco);
 }
-  // planning_scene_->
 }
 
 void PlanningSceneCollisionCheck::detachObject(const std::string &object_id, const std::string &link_name)
 {
-  moveit_msgs::AttachedCollisionObject aco;
+  moveit_msgs::msg::AttachedCollisionObject aco;
   aco.object.id = object_id;
-  aco.object.operation = moveit_msgs::CollisionObject::REMOVE;
+  aco.object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
   aco.object.pose.orientation.w = 1.0;
   aco.link_name = link_name;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processAttachedCollisionObjectMsg(aco);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processAttachedCollisionObjectMsg(aco);
 }
 }
 
 void PlanningSceneCollisionCheck::detachAllObjects(const std::string & link_name)
 {
-  moveit_msgs::AttachedCollisionObject aco;
-  aco.object.operation = moveit_msgs::CollisionObject::REMOVE;
+  moveit_msgs::msg::AttachedCollisionObject aco;
+  aco.object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
   aco.link_name = link_name;
   
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processAttachedCollisionObjectMsg(aco);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processAttachedCollisionObjectMsg(aco);
 }
 }
 
 void PlanningSceneCollisionCheck::removeObject(const std::string & object_id)
 {
-  moveit_msgs::CollisionObject co;
+  moveit_msgs::msg::CollisionObject co;
   co.id = object_id;
-  co.operation = moveit_msgs::CollisionObject::REMOVE;
+  co.operation = moveit_msgs::msg::CollisionObject::REMOVE;
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->processCollisionObjectMsg(co);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
 }
 }
 
-// std::vector<std::string> PlanningSceneCollisionCheck::getAttachedObjects(const std::string & link_name)
-// {
-  
-// }
 
 std::vector<std::string> PlanningSceneCollisionCheck::getAllAttachedObjects()
 {
   std::vector<std::string> attached_objects;
-  std::vector<moveit_msgs::AttachedCollisionObject> acos;
-  planning_scene_monitor_->lockSceneRead();
-  planning_scene_->getAttachedCollisionObjectMsgs(acos);
-  planning_scene_monitor_->unlockSceneRead();
+  std::vector<moveit_msgs::msg::AttachedCollisionObject> acos;
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->getAttachedCollisionObjectMsgs(acos);
   
   for (auto & aco : acos)
   {
@@ -463,31 +407,22 @@ std::vector<std::string> PlanningSceneCollisionCheck::getAllAttachedObjects()
 void PlanningSceneCollisionCheck::changeCollision(const std::string &name1, const std::string &name2, bool allowed)
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->getAllowedCollisionMatrixNonConst().setEntry(name1, name2, allowed);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->getAllowedCollisionMatrixNonConst().setEntry(name1, name2, allowed);
 }
 
 void PlanningSceneCollisionCheck::changeCollisions(const std::string &name1, const std::vector< std::string > &other_names, bool allowed)
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->getAllowedCollisionMatrixNonConst().setEntry(name1, other_names, allowed);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->getAllowedCollisionMatrixNonConst().setEntry(name1, other_names, allowed);
 }
 
 void PlanningSceneCollisionCheck::changeCollisionsAll(const std::string &name1, bool allowed)
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneWrite();
-  planning_scene_->getAllowedCollisionMatrixNonConst().setEntry(name1, allowed);
-  planning_scene_monitor_->unlockSceneWrite();
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->getAllowedCollisionMatrixNonConst().setEntry(name1, allowed);
 }
 
-Eigen::Isometry3d PlanningSceneCollisionCheck::geometry_pose_to_isometry(geometry_msgs::Pose geometry_pose)
+Eigen::Isometry3d PlanningSceneCollisionCheck::geometry_pose_to_isometry(geometry_msgs::msg::Pose geometry_pose)
 {
   Eigen::Quaterniond quat_;
   Eigen::Isometry3d transform_;
@@ -500,173 +435,57 @@ Eigen::Isometry3d PlanningSceneCollisionCheck::geometry_pose_to_isometry(geometr
   return transform_;
 }
 
-moveit_msgs::PlanningScene PlanningSceneCollisionCheck::getPlanningSceneMsg()
+moveit_msgs::msg::PlanningScene PlanningSceneCollisionCheck::getPlanningSceneMsg()
 {
-  moveit_msgs::PlanningScene scene_msgs;
+  moveit_msgs::msg::PlanningScene scene_msgs;
   std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneRead();
-  planning_scene_->getPlanningSceneMsg(scene_msgs);
-  planning_scene_monitor_->unlockSceneRead();
+  planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_)->getPlanningSceneMsg(scene_msgs);
   return scene_msgs;
 }
 
 void PlanningSceneCollisionCheck::publishPlanningSceneMsg()
 {
   std::scoped_lock _lock(planning_scene_mtx_);
-  moveit_msgs::PlanningScene scene_msg;
-  // while(ros::ok())
-  // {
-  //   if (scene_pub_.getNumSubscribers() >= 1) break;
-  // }
-  planning_scene_->getPlanningSceneMsg(scene_msg);
-  scene_pub_.publish(scene_msg);
-  planning_scene_monitor_->triggerSceneUpdateEvent(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE);
+  moveit_msgs::msg::PlanningScene scene_msg;
 
-  // planning_scene_->set
-  // planning_scene_->getAllowedCollisionMatrix().print(std::cout);
+  planning_scene_->getPlanningSceneMsg(scene_msg);
+  scene_pub_->publish(scene_msg);
+  planning_scene_monitor_->triggerSceneUpdateEvent(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE);
 }
 
 void PlanningSceneCollisionCheck::printCurrentCollisionInfos()
 {
   std::cout << streamCurrentCollisionInfos().str();
 }
-
 std::stringstream PlanningSceneCollisionCheck::streamCurrentCollisionInfos()
 {
   collision_detection::CollisionRequest collision_request;
-  collision_detection::CollisionResult collision_result1, collision_result2, collision_result3;
+  collision_detection::CollisionResult collision_result;
   {
   std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
   
-  planning_scene_monitor_->lockSceneRead();
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
+  moveit::core::RobotState current_state = planning_scene_->getCurrentState();
   
   collision_request.contacts = true;
-  collision_request.distance = true;
+  collision_request.distance = false;
   collision_request.verbose = false;
-  collision_request.max_contacts = 1000;
-  collision_request.max_contacts_per_pair = 1000;
-  planning_scene_->checkCollision(collision_request, collision_result1, current_state, true, false);
-  planning_scene_monitor_->unlockSceneRead();
+  planning_scene_->checkCollision(collision_request, collision_result, current_state);
   }
   std::stringstream ss;
-  ss << "===================================\n";
-  ss << " > Only for self-collision " << std::endl;
-  ss << " \t> Current collision status: " << collision_result1.collision << std::endl;
-  for (auto & contact : collision_result1.contacts)
+  ss << "===================================\n ";
+  ss << " > Current collision status: " << collision_result.collision << std::endl;
+  for (auto & contact : collision_result.contacts)
   {
-    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
+    ss << "    > Contact : " << contact.first.first << " - " << contact.first.second << std::endl;
+  //             << "      > contact pos :"  << contact.second.
+  // Eigen::Vector3d pos;
   }
-  ss << " \t> Distance : " << collision_result1.distance << std::endl;
-  {
-  std::scoped_lock _lock(planning_scene_mtx_);
-  
-  planning_scene_monitor_->lockSceneRead();
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
-  planning_scene_->checkCollision(collision_request, collision_result2, current_state, false, true);
-  planning_scene_monitor_->unlockSceneRead();
-  }
-  ss << " > Only for env-collision " << std::endl;
-  ss << " \t> Current collision status: " << collision_result2.collision << std::endl;
-  for (auto & contact : collision_result2.contacts)
-  {
-    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
-  }
-  ss << " \t> Distance : " << collision_result2.distance << std::endl;
-  {
-  std::scoped_lock _lock(planning_scene_mtx_);
-  
-  planning_scene_monitor_->lockSceneRead();
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
-  planning_scene_->checkCollision(collision_request, collision_result3, current_state, true, true);
-  planning_scene_monitor_->unlockSceneRead();
-  }
-  ss << " > Both for self/env-collision " << std::endl;
-  ss << " \t> Current collision status: " << collision_result3.collision << std::endl;
-  for (auto & contact : collision_result3.contacts)
-  {
-    ss << " \t\t> Contact  : " << contact.first.first << " - " << contact.first.second << std::endl;
-  }
-  ss << " \t> Distance : " << collision_result3.distance << std::endl;
-  ss << "===================================\n";
+  ss << "===================================\n ";
   return ss;
 }
 
 planning_scene::PlanningScenePtr& PlanningSceneCollisionCheck::getPlanningScene()
 {
   return planning_scene_;
-}
-double PlanningSceneCollisionCheck::getMinDistance(const Eigen::Ref<const Eigen::VectorXd> &q, const bool is_self, const bool is_env)
-{
-  collision_detection::CollisionRequest collision_request;
-  collision_detection::CollisionResult collision_result;
-  {
-  std::scoped_lock _lock(planning_scene_mtx_);
-
-  planning_scene_monitor_->lockSceneRead();
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
-  
-  collision_request.contacts = true;
-  collision_request.distance = true;
-  collision_request.verbose = false;
-  collision_request.max_contacts = 1000;
-  collision_request.max_contacts_per_pair = 1000;
-  planning_scene_->checkCollision(collision_request, collision_result, current_state, is_self, is_env);
-  planning_scene_monitor_->unlockSceneRead();
-  }
-  return collision_result.distance;
-}
-Eigen::VectorXd PlanningSceneCollisionCheck::getMinDistanceVector(const Eigen::Ref<const Eigen::VectorXd> &q)
-{
-  collision_detection::CollisionRequest collision_request;
-  std::vector<collision_detection::CollisionResult> collision_result_v;
-  int num_links = 9; 
-  Eigen::VectorXd min_dist(num_links*group_infos_.size());
-  min_dist.setZero();
-  {
-  std::scoped_lock _lock(planning_scene_mtx_);
-  robot_state::RobotState current_state = planning_scene_->getCurrentState();
-  
-  collision_request.contacts = true;
-  collision_request.distance = true;
-  collision_request.verbose = false;
-  collision_request.max_contacts = 1000;
-  collision_request.max_contacts_per_pair = 1000;
-
-  planning_scene_->checkCollisionVector(collision_request, collision_result_v, current_state);
-  }
-
-  // std::cout<<collision_result_v.size()<<std::endl;
-  // for(std::size_t i = 0; i < collision_result_v.size(); i++)
-  //   std::cout<< collision_result_v[i].distance <<std::endl;
-  if (collision_result_v.size() != link_names_.size())
-  {
-    std::cout << "collision geometry number does not equal to collision result!"<<std::endl;
-    return min_dist;
-  }
-
-  for (std::size_t i = 0; i < collision_result_v.size(); ++i)
-  {
-    for (std::size_t group_idx = 0; group_idx < group_infos_.size(); ++group_idx)
-    {
-      if (link_names_[i].find(group_infos_[group_idx].first)  != std::string::npos)
-      {
-        if     (link_names_[i].find("link0") != std::string::npos) min_dist(group_idx * num_links + 0) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link1") != std::string::npos) min_dist(group_idx * num_links + 1) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link2") != std::string::npos) min_dist(group_idx * num_links + 2) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link3") != std::string::npos) min_dist(group_idx * num_links + 3) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link4") != std::string::npos) min_dist(group_idx * num_links + 4) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link5") != std::string::npos) min_dist(group_idx * num_links + 5) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link6") != std::string::npos) min_dist(group_idx * num_links + 6) = collision_result_v[i].distance;
-        else if(link_names_[i].find("link7") != std::string::npos) min_dist(group_idx * num_links + 7) = collision_result_v[i].distance;
-        // else if(link_names_[i].find("link8") != std::string::npos) min_dist(group_idx * num_links + 8) = collision_result_v[i].distance;
-        else if(link_names_[i].find("hand")   != std::string::npos) min_dist(group_idx * num_links + 8) = collision_result_v[i].distance ;
-        else if(link_names_[i].find("finger") != std::string::npos) min_dist(group_idx * num_links + 8) = std::min(collision_result_v[i].distance, min_dist(group_idx * num_links + 8)) ;
-        break;
-      }
-    }
-  }
-  
-  return min_dist;
 }

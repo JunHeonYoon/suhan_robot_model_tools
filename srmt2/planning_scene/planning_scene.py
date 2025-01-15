@@ -1,21 +1,24 @@
-from suhan_robot_model_tools.suhan_robot_model_tools_wrapper_cpp import NameVector, IntVector, PlanningSceneCollisionCheck, isometry_to_vectors
-from moveit_ros_planning_interface._moveit_roscpp_initializer import roscpp_init
-import rospy
+from suhan_robot_model_tools2_wrapper_cpp import NameVector, IntVector, PlanningSceneCollisionCheck, isometry_to_vectors
 import copy
 import numpy as np
 # import math
-from srmt.utils import ros_init
+from srmt2.utils import ros_init
 
 # ros_init = False
 
 class PlanningSceneLight(object):
-    def __init__(self, topic_name = "/planning_scene", base_link='/base', robot_description_param='robot_description') -> None:
+    def __init__(self, 
+                 param_node_name:str="rviz2",
+                 node_name:str="PlanningScene",  
+                 topic_name:str="/planning_scene", 
+                 base_link:str='/base', 
+                 robot_description_param:str='robot_description') -> None:
         """Planning Scene Light
         It does not require full group names and joitn dofs
         """
-        ros_init('PlanningScene')
+        ros_init()
 
-        self.pc = PlanningSceneCollisionCheck(topic_name, robot_description_param)
+        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, robot_description_param)
         self.pc.set_frame_id(base_link)
         
 
@@ -84,11 +87,26 @@ class PlanningSceneLight(object):
 
 
 class PlanningScene(PlanningSceneLight):
-    def __init__(self, arm_names, arm_dofs, base_link='/base', hand_names=None, hand_joints=[2], hand_open = [[0.0325,0.0325]], hand_closed = [[0.0, 0.0]], topic_name = "/planning_scene", robot_description_param='robot_description', q_init = None, base_q=None, start_index=None, end_index=None):
+    def __init__(self, 
+                 arm_names:list, 
+                 arm_dofs:list, 
+                 base_link:str='/base', 
+                 hand_names:list=None, 
+                 hand_joints:list=[2], 
+                 hand_open:list=[[0.0325,0.0325]], 
+                 hand_closed:list=[[0.0, 0.0]], 
+                 param_node_name:str="rviz2",
+                 node_name:str="PlanningScene",
+                 topic_name:str="/planning_scene", 
+                 robot_description_param:str='robot_description',
+                 q_init:np.array=None,
+                 base_q:np.array=None,
+                 start_index:int=None,
+                 end_index:int=None):
         
-        ros_init('PlanningScene')
+        ros_init()
 
-        self.pc = PlanningSceneCollisionCheck(topic_name, robot_description_param)
+        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, robot_description_param)
         
         self.base_q = base_q
         self.start_index = start_index
@@ -110,7 +128,6 @@ class PlanningScene(PlanningSceneLight):
             self.name_to_indices[name] = (current_idx, current_idx+dof)
             current_idx += dof
 
-
         self.hand_open = np.array(hand_open, dtype=np.double)
         self.hand_closed = np.array(hand_closed, dtype=np.double)
         self.hand_joints = hand_joints
@@ -127,12 +144,6 @@ class PlanningScene(PlanningSceneLight):
         
         if hand_names is not None:
             self.gripper_open = [True] * len(hand_names)
-        # dim = np.array([0.05,0.05,0.4])
-        # pos = np.array([0.33244155,-0.3,1.4-0.25-0.1])
-        # quat = np.array([0,0,0,1])
-        # self.pc.add_box(dim,'handbox',pos,quat)
-        # touch_links = NameVector()
-        # self.pc.attach_object('handbox','panda_1_hand',touch_links)
 
     def set_planning_joint_group(self, name):
         self.set_planning_joint_index(*self.name_to_indices[name])
@@ -194,45 +205,3 @@ class PlanningScene(PlanningSceneLight):
         q = self.add_gripper_to_q(q)
         return self.pc.is_valid(q)
 
-    def add_box(self, name, dim, pos, quat):
-        self.pc.add_box(np.array(dim,dtype=np.double),name,
-                        np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
-    def add_cylinder(self, name, height, radius, pos, quat):
-        self.pc.add_cylinder(np.array([height, radius],dtype=np.double), name, 
-                             np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
-    def add_sphere(self, name, radius, pos, quat):
-        self.pc.add_sphere(radius, name, 
-                           np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
-    def add_mesh(self, name, mesh_path, pos, quat):
-        self.pc.add_mesh_from_file(mesh_path, name, 
-                         np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
-    def attach_object(self, object_id, link_name, touch_links=[]):
-        _touch_links = NameVector()
-        
-        for tl in touch_links:
-            _touch_links.append(tl)
-        
-        self.pc.attach_object(object_id, link_name, _touch_links)
-
-    def detach_object(self, object_id, link_name):
-        self.pc.detach_object(object_id, link_name)
-
-    def update_object_pose(self, object_id, pos, quat):
-        self.pc.update_object_pose(object_id, np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
-    def print_current_collision_infos(self):
-        self.pc.print_current_collision_infos()
-
-    def min_distance(self, q, is_self=True, is_env=True):
-        self.update_joints(q)
-        min_dist = self.pc.get_min_distance(q, is_self, is_env)
-        return min_dist 
-    
-    def min_distance_vector(self, q):
-        self.update_joints(q)
-        min_dist = np.array(self.pc.get_min_distance_vector(q))
-        return min_dist 

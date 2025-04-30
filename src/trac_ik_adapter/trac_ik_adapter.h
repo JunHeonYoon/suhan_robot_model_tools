@@ -2,7 +2,7 @@
 
 #include <mutex>
 #include <random>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Dense>
 #include <trac_ik/trac_ik.hpp>
 

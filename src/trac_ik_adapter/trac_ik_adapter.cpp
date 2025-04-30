@@ -67,14 +67,14 @@ TRACIKAdapter::TRACIKAdapter(const std::string& base_link,
   std::scoped_lock _lock(iK_solver_mutex_);
   last_transform_.setIdentity(); 
   bool valid = trac_ik_solver_.getKDLChain(chain_);
-  if (!valid){ROS_ERROR("There was no valid KDL chain found");return;}
+  if (!valid){RCLCPP_ERROR(rclcpp::get_logger("TRACIKAdapter"), "There was no valid KDL chain found");return;}
 
   fk_solver_.reset(new KDL::ChainFkSolverPos_recursive(chain_));
   jac_solver_.reset(new KDL::ChainJntToJacSolver(chain_));
 
   KDL::JntArray ll, ul; //lower joint limits, upper joint limits
   valid = trac_ik_solver_.getKDLLimits(ll, ul);
-  if (!valid){ROS_ERROR("There were no valid KDL joint limits found");return;}
+  if (!valid){RCLCPP_ERROR(rclcpp::get_logger("TRACIKAdapter"), "There were no valid KDL joint limits found");return;}
 
   n_joint_ = chain_.getNrOfJoints();
   assert(n_joint_ == ll.data.size());
@@ -179,7 +179,7 @@ void TRACIKAdapter::setBounds(const Eigen::Ref<const Eigen::VectorXd> &lb, const
   valid = trac_ik_solver_.setKDLLimits(ll,ul);
   if (!valid)
   {
-    ROS_ERROR("setting bounds fails");
+    RCLCPP_ERROR(rclcpp::get_logger("TRACIKAdapter"), "Setting bounds failed");
   }
 }
 
@@ -278,6 +278,6 @@ void TRACIKAdapter::setSolveType(const std::string & type)
   }
   else
   {
-    ROS_ERROR("invalid solve type");
+    RCLCPP_ERROR(rclcpp::get_logger("TRACIKAdapter"), "Invalid solve type: '%s'", type.c_str());
   }
 }

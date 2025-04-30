@@ -41,7 +41,6 @@ class TRACIK:
     ):
         ros_init()
 
-
         if urdf_file_path is None:
             urdf_xml = self._fetch_remote_urdf(param_node_name, robot_description_param)
         else:
@@ -89,10 +88,10 @@ class TRACIK:
         return urdf_xml
 
     def _cleanup(self, node: Node):
-        global ros_initialized
+        # global ros_initialized
         node.destroy_node()
-        if ros_initialized:
-            rclpy.shutdown()
+        # if ros_initialized:
+            # rclpy.shutdown()
     
     def solve(self, pos, quat, q_init):
         assert(self.tracik.get_num_joints() == len(q_init), 'q_init size mismatch')

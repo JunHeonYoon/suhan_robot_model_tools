@@ -1,4 +1,4 @@
-from srmt.planning_scene import PlanningScene
+from srmt2.planning_scene import PlanningScene
 
 import numpy as np
 import random

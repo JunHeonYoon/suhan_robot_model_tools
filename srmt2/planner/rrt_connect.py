@@ -1,8 +1,8 @@
 import numpy as np
 
 # from srmt.planning_scene import PlanningScene
-from srmt.planner.abstact_planner import Planner
-from srmt.planner.motion_tree import MotionTree
+from srmt2.planner.abstact_planner import Planner
+from srmt2.planner.motion_tree import MotionTree
 
 import random
 from enum import Enum

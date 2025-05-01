@@ -3,7 +3,13 @@ import numpy as np
 import time
 
 
-pc = PlanningScene(node_name="PlanningScene", arm_names=['fr3'], arm_dofs=[7], base_link="base_link")
+# pc = PlanningScene(node_name="PlanningScene", arm_names=['fr3'], arm_dofs=[7], base_link="base_link")
+pc = PlanningScene(node_name="PlanningScene", 
+                   arm_names=['fr3'], 
+                   arm_dofs=[7], 
+                   base_link="base_link", 
+                   urdf_file_path="/home/yoonjunheon/ros2_ws/src/husky_fr3_ros2/husky_fr3_description/urdf/husky_fr3.urdf", 
+                   srdf_file_path="/home/yoonjunheon/ros2_ws/src/husky_fr3_ros2/husky_fr3_moveit_config/config/husky_fr3.srdf",)
 pc.add_box('abcd', [.1,0.1,0.5], [-0.3,-0.1,1.1], [0.0,0.0,0.0,1.0])
 pc.add_box('abcd2', [0.2,0.5,0.1], [0.2,0.1,1.1], [0.0,0.0,0.0,1.0])
     

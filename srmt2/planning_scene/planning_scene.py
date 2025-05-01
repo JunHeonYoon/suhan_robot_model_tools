@@ -2,9 +2,7 @@ from suhan_robot_model_tools2_wrapper_cpp import NameVector, IntVector, Planning
 import copy
 import numpy as np
 # import math
-from srmt2.utils import ros_init
-
-# ros_init = False
+from srmt2.utils.ros_utils import ros_init, fetch_remote_param
 
 class PlanningSceneLight(object):
     def __init__(self, 
@@ -12,13 +10,13 @@ class PlanningSceneLight(object):
                  node_name:str="PlanningScene",  
                  topic_name:str="/planning_scene", 
                  base_link:str='/base', 
-                 robot_description_param:str='robot_description') -> None:
+                 urdf_param:str='robot_description') -> None:
         """Planning Scene Light
         It does not require full group names and joitn dofs
         """
         ros_init()
 
-        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, robot_description_param)
+        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, urdf_param)
         self.pc.set_frame_id(base_link)
         
 
@@ -95,18 +93,34 @@ class PlanningScene(PlanningSceneLight):
                  hand_joints:list=[2], 
                  hand_open:list=[[0.0325,0.0325]], 
                  hand_closed:list=[[0.0, 0.0]], 
-                 param_node_name:str="rviz2",
                  node_name:str="PlanningScene",
                  topic_name:str="/planning_scene", 
-                 robot_description_param:str='robot_description',
+                 param_node_name:str="rviz2",
+                 urdf_description_param:str='robot_description',
+                 srdf_description_param:str='robot_description_semantic',
+                 urdf_file_path:str=None,
+                 srdf_file_path:str=None,
                  q_init:np.array=None,
                  base_q:np.array=None,
                  start_index:int=None,
                  end_index:int=None):
         
         ros_init()
+        
+        if urdf_file_path is not None:
+            with open(urdf_file_path, "r", encoding="utf-8") as f:
+                urdf_xml = f.read()
+        else:
+            urdf_xml = fetch_remote_param(param_node_name, urdf_description_param)
+            
+        if srdf_file_path is not None:
+            with open(srdf_file_path, "r", encoding="utf-8") as f:
+                srdf_xml = f.read()
+        else:
+            srdf_xml = fetch_remote_param(param_node_name, srdf_description_param)
 
-        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, robot_description_param)
+        # self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, urdf_param)
+        self.pc = PlanningSceneCollisionCheck(node_name, topic_name, urdf_xml, srdf_xml)
         
         self.base_q = base_q
         self.start_index = start_index
@@ -205,3 +219,12 @@ class PlanningScene(PlanningSceneLight):
         q = self.add_gripper_to_q(q)
         return self.pc.is_valid(q)
 
+    def time_parameterize(self, path, max_velocity_scaling_factor=1.0, max_acceleration_scaling_factor=1.0):
+        N, dof = path.shape
+        q_result   = np.zeros((N + 2, dof),  order='F', dtype=np.float64)
+        qdot_result = np.zeros_like(q_result,  order='F')
+        qddot_result = np.zeros_like(q_result, order='F')
+        time_result = np.zeros(N + 2,          order='F', dtype=np.float64)
+        
+        self.pc.time_parameterize(path, q_result, qdot_result, qddot_result, time_result, max_velocity_scaling_factor, max_acceleration_scaling_factor)
+        return q_result, qdot_result, qddot_result, time_result

@@ -7,6 +7,9 @@
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/kinematic_constraints/utils.h>
+#include <moveit/robot_trajectory/robot_trajectory.h>
+#include <moveit/trajectory_processing/iterative_spline_parameterization.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <geometric_shapes/shape_operations.h>
 #include <shape_msgs/msg/mesh.hpp>
@@ -24,7 +27,14 @@ if(debug_file_.is_open()) \
 class PlanningSceneCollisionCheck
 {
 public:
-  PlanningSceneCollisionCheck(const std::string & param_node_name, const std::string & node_name, const std::string & topic_name, const std::string & robot_description_param = "robot_description");
+  // PlanningSceneCollisionCheck(const std::string & param_node_name, 
+  //                             const std::string & node_name, 
+  //                             const std::string & topic_name, 
+  //                             const std::string & robot_description_param = "robot_description");
+  PlanningSceneCollisionCheck(const std::string& node_name, 
+                              const std::string& topic_name, 
+                              const std::string& urdf_string,
+                              const std::string& srdf_string);
   void setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs);
   bool isValid(const Eigen::Ref<const Eigen::VectorXd> &q) const;
   bool isCurrentValid() const;
@@ -77,6 +87,14 @@ public:
   void setDebugFilePrefix(const std::string &name) { debug_file_prefix_ = name; }
 
   planning_scene::PlanningScenePtr& getPlanningScene();
+
+  bool timeParameterize(const Eigen::Ref<const Eigen::MatrixXd>& path,
+                        Eigen::Ref<Eigen::MatrixXd> q_result,
+                        Eigen::Ref<Eigen::MatrixXd> qdot_result,
+                        Eigen::Ref<Eigen::MatrixXd> qddot_result,
+                        Eigen::Ref<Eigen::VectorXd> time_result,
+                        const double max_velocity_scaling_factor = 1.0,
+                        const double max_acceleration_scaling_factor = 1.0);
 
 private:
   std::vector<std::pair<std::string,int>> group_infos_;

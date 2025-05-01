@@ -1,43 +1,67 @@
 #include "collision_checker/planning_scene_collision_check.h"
 
-PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string & param_node_name, const std::string & node_name, const std::string & topic_name, const std::string & robot_description_param)
+// PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string & param_node_name, const std::string & node_name, const std::string & topic_name, const std::string & robot_description_param)
+// {
+//   if (!rclcpp::ok()) rclcpp::init(0, nullptr);
+//   node_ = std::make_shared<rclcpp::Node>(node_name);
+
+//   auto client = std::make_shared<rclcpp::SyncParametersClient>(node_, param_node_name);
+//   if (!client->wait_for_service(std::chrono::seconds(5))) {
+//       RCLCPP_ERROR(node_->get_logger(), "Failed to connect to parameter server in %s.",param_node_name);
+//       return;
+//   }
+//   std::string robot_description;
+//   std::string robot_description_semantic;
+//   try {
+//       robot_description = client->get_parameter<std::string>("robot_description");
+//   } catch (const std::exception & e) {
+//       RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description: %s", e.what());
+//       return;
+//   }
+//   try {
+//       robot_description_semantic = client->get_parameter<std::string>("robot_description_semantic");
+//   } catch (const std::exception & e) {
+//       RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description_semantic: %s", e.what());
+//       return;
+//   }
+
+//   node_->declare_parameter<std::string>("robot_description", "");
+//   node_->set_parameter(rclcpp::Parameter("robot_description", robot_description));
+//   node_->declare_parameter<std::string>("robot_description_semantic", "");
+//   node_->set_parameter(rclcpp::Parameter("robot_description_semantic", robot_description_semantic));
+
+
+
+//   robot_model_loader::RobotModelLoader robot_model_loader(node_, robot_description_param, false);
+//   robot_model_ = robot_model_loader.getModel();
+//   planning_scene_ = std::make_shared<planning_scene::PlanningScene> (robot_model_);
+//   planning_scene_->setName("srmt2 planning scene");
+//   scene_pub_ = node_->create_publisher<moveit_msgs::msg::PlanningScene>(topic_name, 1);
+//   planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(node_, planning_scene_, robot_description_param);
+//   planning_scene_monitor_->providePlanningSceneService();
+//   planning_scene_monitor_->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE, topic_name);
+//   planning_scene_monitor_->startSceneMonitor(topic_name);
+// };
+
+PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string& node_name, 
+                                                         const std::string& topic_name, 
+                                                         const std::string& urdf_string,
+                                                         const std::string& srdf_string)
 {
   if (!rclcpp::ok()) rclcpp::init(0, nullptr);
   node_ = std::make_shared<rclcpp::Node>(node_name);
 
-  auto client = std::make_shared<rclcpp::SyncParametersClient>(node_, param_node_name);
-  if (!client->wait_for_service(std::chrono::seconds(5))) {
-      RCLCPP_ERROR(node_->get_logger(), "Failed to connect to parameter server in %s.",param_node_name);
-      return;
-  }
-  std::string robot_description;
-  std::string robot_description_semantic;
-  try {
-      robot_description = client->get_parameter<std::string>("robot_description");
-  } catch (const std::exception & e) {
-      RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description: %s", e.what());
-      return;
-  }
-  try {
-      robot_description_semantic = client->get_parameter<std::string>("robot_description_semantic");
-  } catch (const std::exception & e) {
-      RCLCPP_ERROR(node_->get_logger(), "Failed to get robot_description_semantic: %s", e.what());
-      return;
-  }
-
   node_->declare_parameter<std::string>("robot_description", "");
-  node_->set_parameter(rclcpp::Parameter("robot_description", robot_description));
+  node_->set_parameter(rclcpp::Parameter("robot_description", urdf_string));
   node_->declare_parameter<std::string>("robot_description_semantic", "");
-  node_->set_parameter(rclcpp::Parameter("robot_description_semantic", robot_description_semantic));
+  node_->set_parameter(rclcpp::Parameter("robot_description_semantic", srdf_string));
 
-
-
-  robot_model_loader::RobotModelLoader robot_model_loader(node_, robot_description_param, false);
+  robot_model_loader::RobotModelLoader robot_model_loader(node_, "robot_description", false);
   robot_model_ = robot_model_loader.getModel();
   planning_scene_ = std::make_shared<planning_scene::PlanningScene> (robot_model_);
   planning_scene_->setName("srmt2 planning scene");
   scene_pub_ = node_->create_publisher<moveit_msgs::msg::PlanningScene>(topic_name, 1);
-  planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(node_, planning_scene_, robot_description_param);
+  planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(node_, planning_scene_, "robot_description");
   planning_scene_monitor_->providePlanningSceneService();
   planning_scene_monitor_->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE, topic_name);
   planning_scene_monitor_->startSceneMonitor(topic_name);
@@ -471,4 +495,65 @@ std::stringstream PlanningSceneCollisionCheck::streamCurrentCollisionInfos()
 planning_scene::PlanningScenePtr& PlanningSceneCollisionCheck::getPlanningScene()
 {
   return planning_scene_;
+}
+
+bool PlanningSceneCollisionCheck::timeParameterize(const Eigen::Ref<const Eigen::MatrixXd>& path,
+  Eigen::Ref<Eigen::MatrixXd> q_result,
+  Eigen::Ref<Eigen::MatrixXd> qdot_result,
+  Eigen::Ref<Eigen::MatrixXd> qddot_result,
+  Eigen::Ref<Eigen::VectorXd> time_result,
+  const double max_velocity_scaling_factor,
+  const double max_acceleration_scaling_factor)
+{
+  trajectory_processing::IterativeSplineParameterization time_parameterization(true);
+  int len_path = path.rows();
+  int len_q = path.cols();
+
+  int len_traj = len_path + 2;
+  assert (q_result.rows() == len_traj);
+  assert (qdot_result.rows() == len_traj);
+  assert (qddot_result.rows() == len_traj);
+  assert (time_result.rows() == len_traj);
+  assert (q_result.cols() == len_q);
+  assert (qdot_result.cols() == len_q);
+  assert (qddot_result.cols() == len_q);
+  assert (time_result.cols() == 1);
+  // q_result.setZero(len_traj, len_q);
+  // qdot_result.setZero(len_traj, len_q);
+  // qddot_result.setZero(len_traj, len_q);
+  // time_result.setZero(len_traj);
+
+  int current_seg_index = 0;
+  for (auto & group_info : group_infos_)
+  {
+    int dof = group_info.second;
+    const auto & path_seg = path.block(0,current_seg_index, path.rows(), dof);
+    robot_trajectory::RobotTrajectory traj(robot_model_, "fr3");
+    moveit::core::RobotState state(traj.getRobotModel());
+    const moveit::core::JointModelGroup* group = traj.getGroup();
+    const std::vector<int>& idices = group->getVariableIndexList();
+
+    for (size_t i=0; i<len_path; i++)
+    { 
+      for (size_t j=0; j<len_q; j++)
+      {
+        state.setVariablePosition(idices[j],path(i, j));
+      }
+      traj.addSuffixWayPoint(state, time_result(i+1));
+    }
+    bool result = time_parameterization.computeTimeStamps(traj, max_velocity_scaling_factor, max_acceleration_scaling_factor);
+
+    for (size_t i=0; i<len_traj; i++)
+    {
+      for (size_t j=0; j<len_q; j++)
+      {
+        q_result    (i,j) = traj.getWayPoint(i).getVariablePosition(idices[j]);
+        qdot_result (i,j) = traj.getWayPoint(i).getVariableVelocity(idices[j]);
+        qddot_result(i,j) = traj.getWayPoint(i).getVariableAcceleration(idices[j]);
+      }
+      time_result(i) = traj.getWayPointDurationFromStart(i);
+    }
+    current_seg_index += dof;
+  }  
+  return true;
 }

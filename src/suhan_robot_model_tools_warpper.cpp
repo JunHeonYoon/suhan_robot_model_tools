@@ -242,6 +242,7 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
       .def("add_mesh_from_file", addMeshFromFile)
       .def("set_frame_id", &PlanningSceneCollisionCheck::setFrameID)
       .def("get_planning_scene", &PlanningSceneCollisionCheck::getPlanningScene, bp::return_internal_reference<>())
+      .def("time_parameterize", &PlanningSceneCollisionCheck::timeParameterize)
       ;
 
   bp::class_<std::shared_ptr<planning_scene::PlanningScene>, boost::noncopyable>("PlanningScene", bp::no_init);

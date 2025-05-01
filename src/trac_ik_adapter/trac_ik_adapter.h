@@ -4,6 +4,7 @@
 #include <random>
 #include <rclcpp/rclcpp.hpp>
 #include <Eigen/Dense>
+
 #include <trac_ik/trac_ik.hpp>
 
 Eigen::Matrix3d getEigenRotation(const KDL::Rotation & r);
@@ -17,7 +18,11 @@ KDL::Frame getKDLFrame(const Eigen::Isometry3d & transform);
 class TRACIKAdapter
 {
 public:
-  TRACIKAdapter(const std::string& base_link, const std::string& tip_link, double max_time, double precision, const std::string& URDF_param = "/robot_description");
+  TRACIKAdapter(const std::string& base_link, 
+                const std::string& tip_link, 
+                double max_time, 
+                double precision, 
+                const std::string& urdf_string);
   bool solve(const Eigen::Ref<const Eigen::VectorXd> &q0, const Eigen::Isometry3d & transform, Eigen::Ref<Eigen::VectorXd> solution);
   bool solve(const Eigen::Isometry3d & transform, Eigen::Ref<Eigen::VectorXd> solution);
   Eigen::Isometry3d forwardKinematics(const Eigen::Ref<const Eigen::VectorXd> &q);

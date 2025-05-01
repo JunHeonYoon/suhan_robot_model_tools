@@ -60,8 +60,8 @@ KDL::Frame getKDLFrame(const Eigen::Isometry3d & transform)
 TRACIKAdapter::TRACIKAdapter(const std::string& base_link, 
                              const std::string& tip_link, 
                              double max_time, double precision,
-                             const std::string& URDF_param)
- : trac_ik_solver_(base_link, tip_link, URDF_param, max_time, precision)
+                             const std::string& urdf_string)
+ : trac_ik_solver_(base_link, tip_link, urdf_string, max_time, precision)
                                   // 0.2, 1e-4 TRAC_IK::Speed
 { 
   std::scoped_lock _lock(iK_solver_mutex_);
@@ -281,3 +281,4 @@ void TRACIKAdapter::setSolveType(const std::string & type)
     RCLCPP_ERROR(rclcpp::get_logger("TRACIKAdapter"), "Invalid solve type: '%s'", type.c_str());
   }
 }
+

@@ -16,8 +16,12 @@ class KinematicsConstraintsFunctions : public ompl::base::Constraint
 {
 public:
   KinematicsConstraintsFunctions(const unsigned int ambientDim, const unsigned int coDim);
-  TRACIKAdapter & addTRACIKAdapter(const std::string & name, const std::string & base_link, 
-                                   const std::string & tip_link, double max_time, double precision, const std::string& URDF_param = "/robot_description");
+  TRACIKAdapter & addTRACIKAdapter(const std::string & name, 
+                                   const std::string & base_link, 
+                                   const std::string & tip_link, 
+                                   double max_time, 
+                                   double precision, 
+                                   const std::string& urdf_string);
   TRACIKAdapter & getTRACIKAdapter(const std::string & name);
   bool project(Eigen::Ref<Eigen::VectorXd> q) const override;
   // void jacobian(const Eigen::Ref<const Eigen::VectorXd> &x, Eigen::Ref<Eigen::MatrixXd> out);

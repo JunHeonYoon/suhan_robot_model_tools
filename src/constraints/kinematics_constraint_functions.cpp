@@ -5,9 +5,14 @@ KinematicsConstraintsFunctions::KinematicsConstraintsFunctions(const unsigned in
 {
 }
 
-TRACIKAdapter & KinematicsConstraintsFunctions::addTRACIKAdapter(const std::string & name, const std::string & base_link, const std::string & tip_link, double max_time, double precision, const std::string& URDF_param)
+TRACIKAdapter & KinematicsConstraintsFunctions::addTRACIKAdapter(const std::string & name, 
+                                                                 const std::string & base_link, 
+                                                                 const std::string & tip_link, 
+                                                                 double max_time, 
+                                                                 double precision, 
+                                                                 const std::string& urdf_string)
 {
-  robot_models_[name] = std::make_shared<TRACIKAdapter>(base_link, tip_link, max_time, precision, URDF_param);
+  robot_models_[name] = std::make_shared<TRACIKAdapter>(base_link, tip_link, max_time, precision, urdf_string);
   return *robot_models_[name];
 }
 

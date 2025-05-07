@@ -13,7 +13,9 @@ Robot model tools for motion planning on ROS2
 ## Installation guide
 Install dependencies
 ```sh
-sudo apt install ros-$ROS_DISTRO-combined-robot-hw ros-$ROS_DISTRO-trac-ik ros-noetic-moveit ros-$ROS_DISTRO-nlopt
+sudo apt install ros-$ROS_DISTRO-moveit
+sudo apt install ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> ~/.bashrc
 sudo apt install libnlopt-dev libnlopt-cxx-dev libglfw3-dev
 
 pip install tqdm matplotlib
@@ -21,12 +23,12 @@ pip install tqdm matplotlib
 
 Install step and running code example
 ```sh
-cd ~/catkin_ws/src/
+cd ~/ros2_ws/src/
+git clone https://github.com/JunHeonYoon/trac_ik.git
+git clone https://github.com/JunHeonYoon/gl_depth_sim
+git clone -b humble https://github.com/JunHeonYoon/suhan_robot_model_tools.git
 
-git clone https://github.com/psh117/gl_depth_sim
-git clone https://github.com/psh117/suhan_robot_model_tools.git
-
-catkin build
-
-source ../devel/setup.bash
+cd ..
+colcon build
+source install/setup.bash
 ```

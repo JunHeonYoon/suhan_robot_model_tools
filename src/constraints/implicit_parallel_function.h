@@ -115,7 +115,7 @@ public:
      * centroid of the platform and project it to a one-dimensional space. */
     ob::ProjectionEvaluatorPtr getProjection(ob::StateSpacePtr space) const;
 
-    void dump(std::ofstream &file) const;
+    // void dump(std::ofstream &file) const;
     void addBenchmarkParameters(ot::Benchmark *bench) const;
 
 private:

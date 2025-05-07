@@ -56,6 +56,6 @@ if r:
                 pc.display(traj_q[i])
             # ------------
             print("Path found")
-            print("Toimes:", traj_time)
+            print("Times:", traj_time)
             break
         

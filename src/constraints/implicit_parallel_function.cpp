@@ -353,14 +353,14 @@ ob::ProjectionEvaluatorPtr ParallelConstraint::getProjection(ob::StateSpacePtr s
     return std::make_shared<ParallelProjection>(space, links_, chains_);
 }
 
-void ParallelConstraint::dump(std::ofstream &file) const
-{
-    file << links_ << std::endl;
-    file << chains_ << std::endl;
-    file << jointRadius_ << std::endl;
-    file << length_ << std::endl;
-    file << radius_ << std::endl;
-}
+// void ParallelConstraint::dump(std::ofstream &file) const
+// {    
+//     file << links_ << std::endl;
+//     file << chains_ << std::endl;
+//     file << jointRadius_ << std::endl;
+//     file << length_ << std::endl;
+//     file << radius_ << std::endl;
+// }
 
 void ParallelConstraint::addBenchmarkParameters(ot::Benchmark *bench) const
 {

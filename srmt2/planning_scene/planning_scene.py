@@ -6,17 +6,27 @@ from srmt2.utils.ros_utils import ros_init, fetch_remote_param
 
 class PlanningSceneLight(object):
     def __init__(self, 
-                 param_node_name:str="rviz2",
                  node_name:str="PlanningScene",  
                  topic_name:str="/planning_scene", 
-                 base_link:str='/base', 
-                 urdf_param:str='robot_description') -> None:
+                 param_node_name:str="rviz2",
+                 urdf_description_param:str='robot_description',
+                 srdf_description_param:str='robot_description_semantic',
+                 urdf_file_path:str=None,
+                 srdf_file_path:str=None,
+                 base_link:str='/base') -> None:
         """Planning Scene Light
         It does not require full group names and joitn dofs
         """
         ros_init()
 
-        self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, urdf_param)
+        self.pc = PlanningSceneCollisionCheck(node_name=node_name, 
+                                              topic_name=topic_name,
+                                              param_node_name=param_node_name,
+                                              urdf_description_param=urdf_description_param,
+                                              srdf_description_param=srdf_description_param,
+                                              urdf_file_path=urdf_file_path,
+                                              srdf_file_path=srdf_file_path,
+                                              base_link=base_link)
         self.pc.set_frame_id(base_link)
         
 

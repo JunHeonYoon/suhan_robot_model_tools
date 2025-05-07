@@ -21,6 +21,8 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS python)
 find_package(ament_cmake_python REQUIRED)
 find_package(ompl REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io)
+find_package(pcl_conversions REQUIRED)
 # find_package(NLopt REQUIRED)
 
 find_library(NLOPT_LIB nlopt REQUIRED)
@@ -29,8 +31,8 @@ set_target_properties(NLopt::nlopt PROPERTIES
   IMPORTED_LOCATION "${NLOPT_LIB}"
 )
 
-# SET(OpenGL_GL_PREFERENCE "GLVND")
-# find_package(gl_depth_sim)
+SET(OpenGL_GL_PREFERENCE "GLVND")
+find_package(gl_depth_sim)
 
 message(STATUS "MoveIt Core Include Directories: ${moveit_core_INCLUDE_DIRS}")
 
@@ -55,7 +57,8 @@ include_directories(
   ${Boost_INCLUDE_DIRS}
   ${eigenpy_INCLUDE_DIRS}
   ${OMPL_INCLUDE_DIRS}
-  # ${gl_depth_sim_INCLUDE_DIRS}
+  ${gl_depth_sim_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 add_library(suhan_robot_model_tools2 SHARED
@@ -67,7 +70,7 @@ add_library(suhan_robot_model_tools2 SHARED
   src/constraints/multi_chain_constraint_functions.cpp
   src/constraints/orientation_constraint_functions.cpp
   src/constraints/implicit_parallel_function.cpp
-  # src/visual_sim/visual_sim.cpp
+  src/visual_sim/visual_sim.cpp
 )
 
 add_library(suhan_robot_model_tools2_wrapper_cpp SHARED
@@ -79,9 +82,10 @@ target_link_libraries(suhan_robot_model_tools2
   Eigen3::Eigen
   rclcpp::rclcpp
   ${OMPL_LIBRARIES}
-  # gl_depth_sim::gl_depth_sim
-  # gl_depth_sim::glad
-  # gl_depth_sim::gl_depth_sim_interfaces
+  ${PCL_LIBRARIES}
+  gl_depth_sim::gl_depth_sim
+  gl_depth_sim::glad
+  gl_depth_sim::gl_depth_sim_interfaces
 )
 
 target_link_libraries(suhan_robot_model_tools2_wrapper_cpp 
@@ -91,9 +95,10 @@ target_link_libraries(suhan_robot_model_tools2_wrapper_cpp
   eigenpy::eigenpy
   Eigen3::Eigen
   ${OMPL_LIBRARIES}
-  # gl_depth_sim::gl_depth_sim
-  # gl_depth_sim::glad
-  # gl_depth_sim::gl_depth_sim_interfaces
+  ${PCL_LIBRARIES}
+  gl_depth_sim::gl_depth_sim
+  gl_depth_sim::glad
+  gl_depth_sim::gl_depth_sim_interfaces
 )
 
 ament_target_dependencies(suhan_robot_model_tools2
@@ -102,6 +107,7 @@ ament_target_dependencies(suhan_robot_model_tools2
   moveit_ros_planning
   moveit_ros_planning_interface
   trac_ik_lib
+  pcl_conversions
 )
 
 ament_target_dependencies(suhan_robot_model_tools2_wrapper_cpp

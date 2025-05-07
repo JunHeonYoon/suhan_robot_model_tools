@@ -12,7 +12,7 @@
 #include "constraints/dual_chain_constraint_functions.h"
 #include "constraints/implicit_parallel_function.h"
 
-// #include "visual_sim/visual_sim.h"
+#include "visual_sim/visual_sim.h"
 
 BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
 {
@@ -27,9 +27,15 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
   bp::def("vectors_to_isometry",vectorsToIsometry);
   bp::def("isometry_to_vectors",isometryToVectors);
 
-  bp::class_<std::vector<std::string> > ("NameVector")
-    .def(boost::python::vector_indexing_suite<std::vector<std::string> >())
-  ;
+  bp::class_<std::vector<std::string>>("NameVector")
+    .def(bp::vector_indexing_suite<std::vector<std::string>>())
+    .def("index",
+         +[](const std::vector<std::string>& v, const std::string& key) {
+             auto it = std::find(v.begin(), v.end(), key);
+             if (it == v.end())
+                 PyErr_SetString(PyExc_ValueError, "value not in vector");
+             return static_cast<int>(std::distance(v.begin(), it));
+         });
 
   bp::class_<std::vector<int> > ("IntVector")
     .def(boost::python::vector_indexing_suite<std::vector<int> >())
@@ -247,18 +253,18 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
 
   bp::class_<std::shared_ptr<planning_scene::PlanningScene>, boost::noncopyable>("PlanningScene", bp::no_init);
 
-//   bp::class_<VisualSim, boost::noncopyable>("VisualSim", bp::init<int, int, double, double, double, double>())
-//       .def("lookat", &VisualSim::lookat)
-//       .def("set_cam_pose", &VisualSim::setCamPose)
-//       .def("set_cam_pos", &VisualSim::setCamPos)
-//       .def("load_scene", &VisualSim::loadScene)
-//       .def("generate_depth_image", &VisualSim::generateDepthImage)
-//       .def("generate_voxel_occupancy", &VisualSim::generateVoxelOccupancy)
-//       .def("generate_point_cloud_matrix", &VisualSim::generatePointCloudMatrix)
-//       .def("generate_local_voxel_occupancy", &VisualSim::generateLocalVoxelOccupancy)
-//       .def("set_grid_resolution", &VisualSim::setGridResolution)
-//       .def("set_grid_resolutions", &VisualSim::setGridResolutions)
-//       .def("set_scene_bounds", &VisualSim::setSceneBounds)
-//       ;
+  bp::class_<VisualSim, boost::noncopyable>("VisualSim", bp::init<int, int, double, double, double, double>())
+      .def("lookat", &VisualSim::lookat)
+      .def("set_cam_pose", &VisualSim::setCamPose)
+      .def("set_cam_pos", &VisualSim::setCamPos)
+      .def("load_scene", &VisualSim::loadScene)
+      .def("generate_depth_image", &VisualSim::generateDepthImage)
+      .def("generate_voxel_occupancy", &VisualSim::generateVoxelOccupancy)
+      .def("generate_point_cloud_matrix", &VisualSim::generatePointCloudMatrix)
+      .def("generate_local_voxel_occupancy", &VisualSim::generateLocalVoxelOccupancy)
+      .def("set_grid_resolution", &VisualSim::setGridResolution)
+      .def("set_grid_resolutions", &VisualSim::setGridResolutions)
+      .def("set_scene_bounds", &VisualSim::setSceneBounds)
+      ;
 
 }

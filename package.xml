@@ -17,14 +17,18 @@
   <depend>moveit_ros_planning</depend>
   <depend>moveit_ros_planning_interface</depend>
   <depend>trac_ik_lib</depend>
-
+  
   <build_depend>Eigen3</build_depend>
   <build_depend>pybind11</build_depend>
-
+  <build_depend>libpcl-dev</build_depend>
+  <build_depend>pcl_conversions</build_depend>
+  
   <exec_depend>Eigen3</exec_depend>
   <exec_depend>pybind11</exec_depend>
   <exec_depend>python3</exec_depend>
   <exec_depend>ament_cmake_python</exec_depend>
+  <exec_depend>libpcl-dev</exec_depend>
+  <exec_depend>pcl_conversions</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

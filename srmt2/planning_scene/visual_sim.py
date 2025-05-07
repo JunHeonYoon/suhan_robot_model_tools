@@ -1,6 +1,5 @@
-from suhan_robot_model_tools.suhan_robot_model_tools_wrapper_cpp import VisualSim, isometry_to_vectors, vectors_to_isometry
+from suhan_robot_model_tools2_wrapper_cpp import VisualSim, isometry_to_vectors, vectors_to_isometry
 from .planning_scene import PlanningSceneLight
-import rospy
 import copy
 import numpy as np
 

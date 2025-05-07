@@ -1,7 +1,7 @@
 #pragma once
 
 #include <mutex>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
 // MoveIt
 #include <moveit/robot_model_loader/robot_model_loader.h>
@@ -9,18 +9,20 @@
 #include <moveit/kinematic_constraints/utils.h>
 
 #include <geometric_shapes/shape_operations.h>
-#include <shape_msgs/Mesh.h>
+#include <shape_msgs/msg/mesh.hpp>
 
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/bodies.h>
-#include <geometric_shapes/shape_operations.h>
 
 #include <fstream>
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-#include <pcl_ros/point_cloud.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h> 
+#include <pcl_conversions/pcl_conversions.h>
+
 #include <gl_depth_sim/sim_depth_camera.h>
 #include <gl_depth_sim/interfaces/pcl_interface.h>
 

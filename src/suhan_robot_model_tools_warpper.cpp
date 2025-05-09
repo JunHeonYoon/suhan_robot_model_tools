@@ -237,6 +237,7 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
       .def("attach_object", &PlanningSceneCollisionCheck::attachObject)
       .def("detach_object", &PlanningSceneCollisionCheck::detachObject)
       .def("remove_object", &PlanningSceneCollisionCheck::removeObject)
+      .def("remove_all_objects", &PlanningSceneCollisionCheck::removeAllObjects)
       .def("publish_planning_scene_msg", &PlanningSceneCollisionCheck::publishPlanningSceneMsg)
       .def("print_current_collision_infos", &PlanningSceneCollisionCheck::printCurrentCollisionInfos)
       .def("update_object_pose", updateObjectPose1)
@@ -248,10 +249,13 @@ BOOST_PYTHON_MODULE(suhan_robot_model_tools2_wrapper_cpp)
       .def("add_mesh_from_file", addMeshFromFile)
       .def("set_frame_id", &PlanningSceneCollisionCheck::setFrameID)
       .def("get_planning_scene", &PlanningSceneCollisionCheck::getPlanningScene, bp::return_internal_reference<>())
+      .def("get_planning_scene_monitor", &PlanningSceneCollisionCheck::getPlanningSceneMonitor, bp::return_internal_reference<>())
       .def("time_parameterize", &PlanningSceneCollisionCheck::timeParameterize)
+      .def("get_minimum_distance", &PlanningSceneCollisionCheck::getMinimumDistance)
       ;
 
   bp::class_<std::shared_ptr<planning_scene::PlanningScene>, boost::noncopyable>("PlanningScene", bp::no_init);
+  bp::class_<std::shared_ptr<planning_scene_monitor::PlanningSceneMonitor>, boost::noncopyable>("PlanningSceneMonitor", bp::no_init);
 
   bp::class_<VisualSim, boost::noncopyable>("VisualSim", bp::init<int, int, double, double, double, double>())
       .def("lookat", &VisualSim::lookat)

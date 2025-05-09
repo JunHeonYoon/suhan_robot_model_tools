@@ -29,7 +29,6 @@ class PlanningSceneLight(object):
                                               base_link=base_link)
         self.pc.set_frame_id(base_link)
         
-
     def update_joints(self, group_name, q):
         """update whole joints
 
@@ -66,9 +65,12 @@ class PlanningSceneLight(object):
     def add_mesh(self, name, mesh_path, pos, quat):
         self.pc.add_mesh_from_file(mesh_path, name, 
                          np.array(pos, dtype=np.double),np.array(quat, dtype=np.double))
-
+        
     def remove_object(self, name):
         self.pc.remove_object(name)
+        
+    def remove_all_objects(self):
+        self.pc.remove_all_objects()
         
     def attach_object(self, object_id, link_name, touch_links=[]):
         _touch_links = NameVector()
@@ -238,3 +240,9 @@ class PlanningScene(PlanningSceneLight):
         
         self.pc.time_parameterize(path, q_result, qdot_result, qddot_result, time_result, max_velocity_scaling_factor, max_acceleration_scaling_factor)
         return q_result, qdot_result, qddot_result, time_result
+
+    def get_minimum_distance(self, q:np.array=None, is_self_collision:bool=True, is_env_collision:bool=True):
+        if q is not None:
+            self.update_joints(q)
+        
+        return self.pc.get_minimum_distance(is_self_collision, is_env_collision)

@@ -6,6 +6,7 @@
 // MoveIt
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/planning_scene/planning_scene.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/kinematic_constraints/utils.h>
 
 #include <geometric_shapes/shape_operations.h>
@@ -41,7 +42,7 @@ public:
   void setCamPose(const Eigen::Isometry3d &cam_pose);
   void lookat(const Eigen::Ref<const Eigen::Vector3d> &target);
 
-  void loadScene(const planning_scene::PlanningScenePtr & scene);
+  void loadScene(const planning_scene_monitor::PlanningSceneMonitorPtr &scene_monitor);
   CloudXYZPtr generatePointCloud();
   Eigen::MatrixXd generatePointCloudMatrix();
   Eigen::VectorXi generateLocalVoxelOccupancy(const Eigen::MatrixXd &point_cloud_matrix, 
@@ -55,8 +56,7 @@ public:
   Eigen::VectorXi generateVoxelOccupancy();
   Eigen::MatrixXf generateDepthImage();
 
-  gds::Mesh geomToMesh(const shapes::ShapeConstPtr &shape, 
-                       const std::string &name);
+  gds::Mesh geomToMesh(const shapes::ShapeConstPtr &shape);
   
   void setGridResolution(const int n_grid);
   void setGridResolutions(const int n_grid_x, const int n_grid_y, const int n_grid_z);

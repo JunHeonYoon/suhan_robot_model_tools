@@ -69,6 +69,7 @@ public:
   void detachObject(const std::string &object_id, const std::string &link_name);
   void detachAllObjects(const std::string & link_name);
   void removeObject(const std::string & object_id);
+  void removeAllObjects();
   std::vector<std::string> getAllAttachedObjects();
   void changeCollision(const std::string &name1, const std::string &name2, bool allowed);
   void changeCollisions(const std::string &name1, const std::vector< std::string > &other_names, bool allowed);
@@ -80,6 +81,7 @@ public:
 
   void printCurrentCollisionInfos();
   std::stringstream streamCurrentCollisionInfos();
+  double getMinimumDistance(bool is_self, bool is_env);
   void setJointGroupPositions(const std::string& name, const Eigen::Ref<const Eigen::VectorXd> &q);
   void setFrameID(const std::string &frame_id) { obs_frame_id_ = frame_id; }
 
@@ -87,6 +89,7 @@ public:
   void setDebugFilePrefix(const std::string &name) { debug_file_prefix_ = name; }
 
   planning_scene::PlanningScenePtr& getPlanningScene();
+  planning_scene_monitor::PlanningSceneMonitorPtr& getPlanningSceneMonitor();
 
   bool timeParameterize(const Eigen::Ref<const Eigen::MatrixXd>& path,
                         Eigen::Ref<Eigen::MatrixXd> q_result,

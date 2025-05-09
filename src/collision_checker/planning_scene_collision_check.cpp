@@ -60,11 +60,14 @@ PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string& node
   robot_model_ = robot_model_loader.getModel();
   planning_scene_ = std::make_shared<planning_scene::PlanningScene> (robot_model_);
   planning_scene_->setName("srmt2 planning scene");
-  scene_pub_ = node_->create_publisher<moveit_msgs::msg::PlanningScene>(topic_name, 1);
+  scene_pub_ = node_->create_publisher<moveit_msgs::msg::PlanningScene>(topic_name,rclcpp::QoS(1).reliable().durability_volatile());
   planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(node_, planning_scene_, "robot_description");
   planning_scene_monitor_->providePlanningSceneService();
   planning_scene_monitor_->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE, topic_name);
   planning_scene_monitor_->startSceneMonitor(topic_name);
+
+  planning_scene_monitor_->setStateUpdateFrequency(100.0);
+  planning_scene_monitor_->setPlanningScenePublishingFrequency(100.0);
 };
 
 void PlanningSceneCollisionCheck::setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs)
@@ -245,11 +248,11 @@ void PlanningSceneCollisionCheck::updateObjectPose(geometry_msgs::msg::Pose pose
   moveit_msgs::msg::CollisionObject co;
   co.header.frame_id = obs_frame_id_;
   co.id = id;
-#if ROS_VERSION_MINOR <= 14
-  co.mesh_poses.push_back(pose);
-#else // >= 15
+// #if ROS_VERSION_MINOR <= 14
+  // co.mesh_poses.push_back(pose);
+// #else // >= 15
   co.pose = pose;
-#endif
+// #endif
   co.operation = moveit_msgs::msg::CollisionObject::MOVE;
 
   planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
@@ -395,11 +398,18 @@ void PlanningSceneCollisionCheck::removeObject(const std::string & object_id)
 {
   moveit_msgs::msg::CollisionObject co;
   co.id = object_id;
+  co.header.frame_id = obs_frame_id_;
+  co.header.stamp = node_->get_clock()->now();
   co.operation = moveit_msgs::msg::CollisionObject::REMOVE;
 
   planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->processCollisionObjectMsg(co);
+
 }
 
+void PlanningSceneCollisionCheck::removeAllObjects()
+{
+  planning_scene_monitor::LockedPlanningSceneRW(planning_scene_monitor_)->removeAllCollisionObjects();
+}
 
 std::vector<std::string> PlanningSceneCollisionCheck::getAllAttachedObjects()
 {
@@ -454,7 +464,9 @@ void PlanningSceneCollisionCheck::publishPlanningSceneMsg()
   std::scoped_lock _lock(planning_scene_mtx_);
   moveit_msgs::msg::PlanningScene scene_msg;
 
-  planning_scene_->getPlanningSceneMsg(scene_msg);
+  // planning_scene_->getPlanningSceneMsg(scene_msg);
+  scene_msg.is_diff = true;
+  planning_scene_->getPlanningSceneDiffMsg(scene_msg);
   scene_pub_->publish(scene_msg);
   planning_scene_monitor_->triggerSceneUpdateEvent(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE);
 }
@@ -496,6 +508,12 @@ planning_scene::PlanningScenePtr& PlanningSceneCollisionCheck::getPlanningScene(
 {
   return planning_scene_;
 }
+
+planning_scene_monitor::PlanningSceneMonitorPtr& PlanningSceneCollisionCheck::getPlanningSceneMonitor()
+{
+  return planning_scene_monitor_;
+}
+
 
 bool PlanningSceneCollisionCheck::timeParameterize(const Eigen::Ref<const Eigen::MatrixXd>& path,
   Eigen::Ref<Eigen::MatrixXd> q_result,
@@ -556,4 +574,44 @@ bool PlanningSceneCollisionCheck::timeParameterize(const Eigen::Ref<const Eigen:
     current_seg_index += dof;
   }  
   return true;
+}
+
+double PlanningSceneCollisionCheck::getMinimumDistance(bool is_self, bool is_env)
+{
+  {
+    std::scoped_lock _lock(planning_scene_mtx_);
+    planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
+    //---------------------------------------------------------------
+    // Build a generic distance request
+    //---------------------------------------------------------------
+    collision_detection::DistanceRequest req;
+    req.type                   = collision_detection::DistanceRequestTypes::GLOBAL;
+    req.enable_nearest_points  = false;
+    req.enable_signed_distance = true;
+    req.acm                    = &planning_scene_->getAllowedCollisionMatrix();
+
+    double min_dist = std::numeric_limits<double>::infinity();
+    const moveit::core::RobotState& state = planning_scene_->getCurrentState();
+
+    //---------------------------------------------------------------
+    // 1. Robot self‑distance (link ↔ link)
+    //---------------------------------------------------------------
+    if (is_self)
+    {
+      collision_detection::DistanceResult res;
+      planning_scene_->getCollisionEnv()->distanceSelf(req, res, state);
+      min_dist = std::min(min_dist, res.minimum_distance.distance);
+    }
+
+    //---------------------------------------------------------------
+    // 2. Robot ↔ environment distance
+    //---------------------------------------------------------------
+    if (is_env)
+    {
+      collision_detection::DistanceResult res;
+      planning_scene_->getCollisionEnv()->distanceRobot(req, res, state);
+      min_dist = std::min(min_dist, res.minimum_distance.distance);
+    }
+    return min_dist; // +∞ if neither branch ran or no result available
+  }
 }

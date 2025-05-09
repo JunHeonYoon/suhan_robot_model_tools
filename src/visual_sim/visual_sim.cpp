@@ -45,30 +45,43 @@ void VisualSim::lookat(const Eigen::Ref<const Eigen::Vector3d> &target)
   cam_pose_.linear() = rot;
 }
 
-void VisualSim::loadScene(const planning_scene::PlanningScenePtr & scene)
+void VisualSim::loadScene(const planning_scene_monitor::PlanningSceneMonitorPtr &scene_monitor)
 {
-  const auto &world = scene->getWorld();
+  sim_->clear();
+  planning_scene_monitor::LockedPlanningSceneRO lock(scene_monitor);
+  const auto &world = scene_monitor->getPlanningScene()->getWorld();
   std::vector<std::string> object_ids = world->getObjectIds();
   for (const auto &name : object_ids)
   {
     const auto &obj = world->getObject(name);
 
+    if (!obj || obj->shapes_.empty())
+    {
+      std::cerr << "Object " << name << " has no shapes." << std::endl;
+      continue;
+    }  
+    
+
     // auto obj = std::make_shared<Geometry>(*obj->shapes_[0]);
     // const auto &obj = scene->getObjectGeometry(name);
 
-    shapes::ShapeConstPtr shape = obj->shapes_[0];
-    const auto &mesh = geomToMesh(shape, name);
-    sim_->add(name, mesh, obj->pose_);
+    // shapes::ShapeConstPtr shape = obj->shapes_[0];
+    // const auto &mesh = geomToMesh(shape);
+    // sim_->add(name, mesh, obj->pose_);
+
+    for(auto& s : obj->shapes_)
+    {
+      const auto &mesh = geomToMesh(s);
+      sim_->add(name, mesh, obj->pose_);
+    }
     // std::cout << "Added object: " << name << std::endl;
     // print obj->shape_poses_[0]
     // std::cout << obj->shape_poses_[0].matrix() << std::endl;
     // std::cout << obj->pose_.matrix() << std::endl;
   }
-
 }
 
-gds::Mesh VisualSim::geomToMesh(const shapes::ShapeConstPtr &shape, 
-                                const std::string &name)
+gds::Mesh VisualSim::geomToMesh(const shapes::ShapeConstPtr &shape)
 {
   gl_depth_sim::EigenAlignedVec<Eigen::Vector3f> vertices;
   std::vector<unsigned int> indices;
@@ -99,6 +112,18 @@ gds::Mesh VisualSim::geomToMesh(const shapes::ShapeConstPtr &shape,
   {
     const auto *cone = dynamic_cast<const shapes::Cone *>(shape.get());
     obj_mesh = shapes::createMeshFromShape(cone);
+    break;
+  }
+  case shapes::ShapeType::OCTREE:
+  {
+    const auto *octree = dynamic_cast<const shapes::OcTree *>(shape.get());
+    obj_mesh = shapes::createMeshFromShape(octree);
+    break;
+  }
+  case shapes::ShapeType::PLANE:
+  {
+    const auto *plane = dynamic_cast<const shapes::Plane *>(shape.get());
+    obj_mesh = shapes::createMeshFromShape(plane);
     break;
   }
   case shapes::ShapeType::MESH:
@@ -145,7 +170,7 @@ Eigen::MatrixXd VisualSim::generatePointCloudMatrix()
 {
   const auto &cloud = generatePointCloud();
   Eigen::MatrixXd cloud_matrix(cloud->size(), 3);
-  for (int i = 0; i < cloud->size(); ++i)
+  for (size_t i = 0; i < cloud->size(); ++i)
   {
     cloud_matrix.row(i) = cam_pose_ * Eigen::Vector3d{(*cloud)[i].x, 
                                                       (*cloud)[i].y, 
@@ -382,7 +407,7 @@ Eigen::VectorXi VisualSim::generateLocalVoxelOccupancy(const Eigen::MatrixXd &po
           break;
         }
 
-        double dist_from_origin = std::min(std::min(t_max[0], t_max[1]), t_max[2]);
+        // double dist_from_origin = std::min(std::min(t_max[0], t_max[1]), t_max[2]);
         
         assert(current_key[0] >= 0);
         assert(current_key[1] >= 0);

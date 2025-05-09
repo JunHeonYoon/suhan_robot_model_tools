@@ -9,7 +9,7 @@ class VisualSimulator(object):
         self.vs = VisualSim(width, height, focal_length_x, focal_length_y, z_near, z_far)
 
     def load_scene(self, planning_scene : PlanningSceneLight):
-        self.vs.load_scene(planning_scene.pc.get_planning_scene())
+        self.vs.load_scene(planning_scene.pc.get_planning_scene_monitor())
 
     def set_cam_pose(self, pos, quat):
         iso = vectors_to_isometry(pos, quat)

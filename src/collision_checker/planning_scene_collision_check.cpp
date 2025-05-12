@@ -182,23 +182,18 @@ double PlanningSceneCollisionCheck::clearance(const Eigen::Ref<const Eigen::Vect
 
 void PlanningSceneCollisionCheck::updateJoints(const Eigen::Ref<const Eigen::VectorXd> &q)
 {
-  std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRW lscene(planning_scene_monitor_);
+
+  moveit::core::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
+
+  int current_seg_index = 0;
+  for (auto & group_info : group_infos_)
   {
-    planning_scene_monitor::LockedPlanningSceneRW lscene(planning_scene_monitor_);
-
-    moveit::core::RobotState & current_state = planning_scene_->getCurrentStateNonConst();
-
-    int current_seg_index = 0;
-    for (auto & group_info : group_infos_)
-    {
-      int dof = group_info.second;
-      const auto & q_seg = q.segment(current_seg_index, dof);
-      current_state.setJointGroupPositions(group_info.first, q_seg);
-      current_seg_index += dof;
-    }
-
+    int dof = group_info.second;
+    const auto & q_seg = q.segment(current_seg_index, dof);
+    current_state.setJointGroupPositions(group_info.first, q_seg);
+    current_seg_index += dof;
   }
-
 }
 
 geometry_msgs::msg::Pose PlanningSceneCollisionCheck::convertEigenToPose(const Eigen::Ref<const Eigen::Vector3d> &pos, const Eigen::Ref<const Eigen::Vector4d> &quat)
@@ -461,12 +456,8 @@ moveit_msgs::msg::PlanningScene PlanningSceneCollisionCheck::getPlanningSceneMsg
 
 void PlanningSceneCollisionCheck::publishPlanningSceneMsg()
 {
-  std::scoped_lock _lock(planning_scene_mtx_);
   moveit_msgs::msg::PlanningScene scene_msg;
-
-  // planning_scene_->getPlanningSceneMsg(scene_msg);
-  scene_msg.is_diff = true;
-  planning_scene_->getPlanningSceneDiffMsg(scene_msg);
+  planning_scene_monitor::LockedPlanningSceneRO(planning_scene_monitor_)->getPlanningSceneDiffMsg(scene_msg);
   scene_pub_->publish(scene_msg);
   planning_scene_monitor_->triggerSceneUpdateEvent(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE);
 }

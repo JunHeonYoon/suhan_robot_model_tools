@@ -168,14 +168,31 @@ CloudXYZPtr VisualSim::generatePointCloud()
 
 Eigen::MatrixXd VisualSim::generatePointCloudMatrix()
 {
-  const auto &cloud = generatePointCloud();
-  Eigen::MatrixXd cloud_matrix(cloud->size(), 3);
-  for (size_t i = 0; i < cloud->size(); ++i)
+  auto cloud_ptr = generatePointCloud();
+  std::vector<Eigen::Vector3d> pts;
+  pts.reserve(cloud_ptr->size());
+
+  for (const auto &p3d : *cloud_ptr)
   {
-    cloud_matrix.row(i) = cam_pose_ * Eigen::Vector3d{(*cloud)[i].x, 
-                                                      (*cloud)[i].y, 
-                                                      (*cloud)[i].z};
+    const double x = p3d.x;
+    const double y = p3d.y;
+    const double z = p3d.z;
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+      continue;
+    }
+    Eigen::Vector3d p(x, y, z);
+    pts.push_back(p);
+    // Eigen::Vector3d p_world = cam_pose_.rotation() * p + cam_pose_.translation();
+    // pts.push_back(p_world);
   }
+
+  Eigen::MatrixXd cloud_matrix(pts.size(), 3);
+  for (size_t i = 0; i < pts.size(); ++i)
+  {
+    cloud_matrix.row(i) = pts[i].transpose();
+  }
+
   return cloud_matrix;
 }
 

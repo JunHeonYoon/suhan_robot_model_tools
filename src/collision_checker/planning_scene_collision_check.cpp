@@ -537,7 +537,7 @@ bool PlanningSceneCollisionCheck::timeParameterize(const Eigen::Ref<const Eigen:
   {
     int dof = group_info.second;
     const auto & path_seg = path.block(0,current_seg_index, path.rows(), dof);
-    robot_trajectory::RobotTrajectory traj(robot_model_, "fr3");
+    robot_trajectory::RobotTrajectory traj(robot_model_, group_info.first);
     moveit::core::RobotState state(traj.getRobotModel());
     const moveit::core::JointModelGroup* group = traj.getGroup();
     const std::vector<int>& idices = group->getVariableIndexList();

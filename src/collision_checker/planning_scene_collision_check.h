@@ -82,6 +82,7 @@ public:
   void printCurrentCollisionInfos();
   std::stringstream streamCurrentCollisionInfos();
   double getMinimumDistance(bool is_self, bool is_env);
+
   void setJointGroupPositions(const std::string& name, const Eigen::Ref<const Eigen::VectorXd> &q);
   void setFrameID(const std::string &frame_id) { obs_frame_id_ = frame_id; }
 
@@ -99,6 +100,12 @@ public:
                         const double max_velocity_scaling_factor = 1.0,
                         const double max_acceleration_scaling_factor = 1.0);
 
+                        
+  void buildPerLinkACMs();
+  Eigen::VectorXd getLinksMinDistances(const std::vector<std::string>& target_links,
+                                       bool is_self,
+                                       bool is_env) const;
+
 private:
   std::vector<std::pair<std::string,int>> group_infos_;
   moveit::core::RobotModelPtr robot_model_;
@@ -113,4 +120,6 @@ private:
 
   mutable std::mutex planning_scene_mtx_;
   mutable collision_detection::CollisionResult last_collision_result_;
+
+  std::unordered_map<std::string, collision_detection::AllowedCollisionMatrix> link_acm_map_;
 };

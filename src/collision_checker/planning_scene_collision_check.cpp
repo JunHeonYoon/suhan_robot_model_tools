@@ -68,6 +68,8 @@ PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string& node
 
   planning_scene_monitor_->setStateUpdateFrequency(100.0);
   planning_scene_monitor_->setPlanningScenePublishingFrequency(100.0);
+
+  buildPerLinkACMs();
 };
 
 void PlanningSceneCollisionCheck::setGroupNamesAndDofs(const std::vector<std::string> &arm_name, const std::vector<int> & dofs)
@@ -605,4 +607,85 @@ double PlanningSceneCollisionCheck::getMinimumDistance(bool is_self, bool is_env
     }
     return min_dist; // +∞ if neither branch ran or no result available
   }
+}
+
+void PlanningSceneCollisionCheck::buildPerLinkACMs()
+{
+  const auto& full_acm = planning_scene_->getAllowedCollisionMatrix();
+  const std::vector<std::string>& link_names = planning_scene_->getRobotModel()->getLinkModelNames();
+
+  link_acm_map_.clear();
+
+  for (const auto& target : link_names)
+  {
+    std::cout <<"link: "<< target << std::endl;
+    collision_detection::AllowedCollisionMatrix acm_copy = full_acm;
+
+    for (const auto& link1 : link_names)
+    {
+      for (const auto& link2 : link_names)
+      {
+        if (link1 != target && link2 != target)
+          acm_copy.setEntry(link1, link2, true);
+      }
+    }
+    link_acm_map_.emplace(target, std::move(acm_copy));
+  }
+}
+
+Eigen::VectorXd PlanningSceneCollisionCheck::getLinksMinDistances(const std::vector<std::string>& target_links,
+                                                                  bool is_self,
+                                                                  bool is_env) const
+{
+  const std::size_t N = target_links.size();
+  Eigen::VectorXd min_dists(N);
+  min_dists.setConstant(std::numeric_limits<double>::infinity());
+
+  if (!is_self && !is_env)
+    return min_dists;
+
+  std::scoped_lock _lock(planning_scene_mtx_);
+  planning_scene_monitor::LockedPlanningSceneRO lscene(planning_scene_monitor_);
+  const auto& state = planning_scene_->getCurrentState();
+
+  collision_detection::DistanceRequest req;
+  req.type                   = collision_detection::DistanceRequestTypes::GLOBAL;
+  req.enable_nearest_points  = false;
+  req.enable_signed_distance = true;
+
+  for (std::size_t i = 0; i < N; ++i)
+  {
+    const std::string& link_name = target_links[i];
+    const auto* lm = planning_scene_->getRobotModel()->getLinkModel(link_name);
+    if (!lm) {
+      RCLCPP_WARN(node_->get_logger(),
+                  "[getLinksMinDistances] unknown link '%s'", link_name.c_str());
+      continue;
+    }
+
+    double best = std::numeric_limits<double>::infinity();
+    collision_detection::DistanceResult res;
+
+    if (is_self)
+    {
+      req.acm = &link_acm_map_.at(link_name);
+      res.clear();
+      planning_scene_->getCollisionEnv()->distanceSelf(req, res, state);
+      best = std::min(best, res.minimum_distance.distance);
+    }
+
+    if (is_env)
+    {
+      std::set<const moveit::core::LinkModel*> active{ lm };
+      req.acm = &planning_scene_->getAllowedCollisionMatrix();
+      req.active_components_only = &active;
+      res.clear();
+      planning_scene_->getCollisionEnv()->distanceRobot(req, res, state);
+      best = std::min(best, res.minimum_distance.distance);
+    }
+
+    min_dists(i) = best;
+  }
+
+  return min_dists;
 }

@@ -241,8 +241,18 @@ class PlanningScene(PlanningSceneLight):
         self.pc.time_parameterize(path, q_result, qdot_result, qddot_result, time_result, max_velocity_scaling_factor, max_acceleration_scaling_factor)
         return q_result, qdot_result, qddot_result, time_result
 
-    def get_minimum_distance(self, q:np.array=None, is_self_collision:bool=True, is_env_collision:bool=True):
+    def get_minimum_distance(self, q:np.ndarray=None, is_self_collision:bool=True, is_env_collision:bool=True):
         if q is not None:
             self.update_joints(q)
         
         return self.pc.get_minimum_distance(is_self_collision, is_env_collision)
+    
+    def get_links_min_distances(self, link_names:list, q:np.ndarray=None, is_self_collision:bool=True, is_env_collision:bool=True):
+        if q is not None:
+            self.update_joints(q)
+            
+        _link_names = NameVector()
+        for ln in link_names:
+            _link_names.append(ln)
+            
+        return np.array([self.pc.get_links_min_distances(_link_names, is_self_collision, is_env_collision)]).flatten()

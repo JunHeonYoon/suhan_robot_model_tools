@@ -50,12 +50,12 @@ PlanningSceneCollisionCheck::PlanningSceneCollisionCheck(const std::string& node
 {
   if (!rclcpp::ok()) rclcpp::init(0, nullptr);
   node_ = std::make_shared<rclcpp::Node>(node_name);
-
+  
   node_->declare_parameter<std::string>("robot_description", "");
   node_->set_parameter(rclcpp::Parameter("robot_description", urdf_string));
   node_->declare_parameter<std::string>("robot_description_semantic", "");
   node_->set_parameter(rclcpp::Parameter("robot_description_semantic", srdf_string));
-
+  
   robot_model_loader::RobotModelLoader robot_model_loader(node_, "robot_description", false);
   robot_model_ = robot_model_loader.getModel();
   planning_scene_ = std::make_shared<planning_scene::PlanningScene> (robot_model_);
@@ -611,22 +611,22 @@ double PlanningSceneCollisionCheck::getMinimumDistance(bool is_self, bool is_env
 
 void PlanningSceneCollisionCheck::buildPerLinkACMs()
 {
-  const auto& full_acm = planning_scene_->getAllowedCollisionMatrix();
-  const std::vector<std::string>& link_names = planning_scene_->getRobotModel()->getLinkModelNames();
-
+  const std::vector<std::string>& link_names = planning_scene_monitor_->getRobotModel()->getLinkModelNames();
   link_acm_map_.clear();
-
+  
   for (const auto& target : link_names)
   {
     std::cout <<"link: "<< target << std::endl;
-    collision_detection::AllowedCollisionMatrix acm_copy = full_acm;
-
+    auto acm_copy = planning_scene_monitor_->getPlanningScene()->getAllowedCollisionMatrix();
+    
     for (const auto& link1 : link_names)
     {
       for (const auto& link2 : link_names)
       {
         if (link1 != target && link2 != target)
+        {
           acm_copy.setEntry(link1, link2, true);
+        }
       }
     }
     link_acm_map_.emplace(target, std::move(acm_copy));

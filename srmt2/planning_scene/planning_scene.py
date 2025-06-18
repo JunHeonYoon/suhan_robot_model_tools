@@ -110,6 +110,8 @@ class PlanningScene(PlanningSceneLight):
                  param_node_name:str="rviz2",
                  urdf_description_param:str='robot_description',
                  srdf_description_param:str='robot_description_semantic',
+                 urdf_xml:str=None,
+                 srdf_xml:str=None,
                  urdf_file_path:str=None,
                  srdf_file_path:str=None,
                  q_init:np.array=None,
@@ -121,18 +123,22 @@ class PlanningScene(PlanningSceneLight):
         
         if urdf_file_path is not None:
             with open(urdf_file_path, "r", encoding="utf-8") as f:
-                urdf_xml = f.read()
+                _urdf_xml = f.read()
+        elif urdf_xml is not None:
+            _urdf_xml = urdf_xml
         else:
-            urdf_xml = fetch_remote_param(param_node_name, urdf_description_param)
+            _urdf_xml = fetch_remote_param(param_node_name, urdf_description_param)
             
         if srdf_file_path is not None:
             with open(srdf_file_path, "r", encoding="utf-8") as f:
-                srdf_xml = f.read()
+                _srdf_xml = f.read()
+        elif srdf_xml is not None:
+            _srdf_xml = srdf_xml
         else:
-            srdf_xml = fetch_remote_param(param_node_name, srdf_description_param)
+            _srdf_xml = fetch_remote_param(param_node_name, srdf_description_param)
 
         # self.pc = PlanningSceneCollisionCheck(param_node_name, node_name, topic_name, urdf_param)
-        self.pc = PlanningSceneCollisionCheck(node_name, topic_name, urdf_xml, srdf_xml)
+        self.pc = PlanningSceneCollisionCheck(node_name, topic_name, _urdf_xml, _srdf_xml)
         
         self.base_q = base_q
         self.start_index = start_index

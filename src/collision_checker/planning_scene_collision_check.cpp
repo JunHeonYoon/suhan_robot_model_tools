@@ -538,34 +538,44 @@ bool PlanningSceneCollisionCheck::timeParameterize(const Eigen::Ref<const Eigen:
   for (auto & group_info : group_infos_)
   {
     int dof = group_info.second;
-    const auto & path_seg = path.block(0,current_seg_index, path.rows(), dof);
+
+    // The incoming path only contains the columns that were actually
+    // planned (e.g. the arm joints). Groups that are registered for
+    // collision checking but not represented in the path (e.g. the
+    // gripper) must be skipped: iterating them would read past the end of
+    // the path and the group's variable-index list, corrupting memory.
+    if (current_seg_index + dof > len_q)
+      break;
+
     robot_trajectory::RobotTrajectory traj(robot_model_, group_info.first);
     moveit::core::RobotState state(traj.getRobotModel());
     const moveit::core::JointModelGroup* group = traj.getGroup();
     const std::vector<int>& idices = group->getVariableIndexList();
 
     for (size_t i=0; i<len_path; i++)
-    { 
-      for (size_t j=0; j<len_q; j++)
+    {
+      for (int j=0; j<dof; j++)
       {
-        state.setVariablePosition(idices[j],path(i, j));
+        state.setVariablePosition(idices[j], path(i, current_seg_index + j));
       }
       traj.addSuffixWayPoint(state, time_result(i+1));
     }
     bool result = time_parameterization.computeTimeStamps(traj, max_velocity_scaling_factor, max_acceleration_scaling_factor);
+    if (!result)
+      return false;
 
     for (size_t i=0; i<len_traj; i++)
     {
-      for (size_t j=0; j<len_q; j++)
+      for (int j=0; j<dof; j++)
       {
-        q_result    (i,j) = traj.getWayPoint(i).getVariablePosition(idices[j]);
-        qdot_result (i,j) = traj.getWayPoint(i).getVariableVelocity(idices[j]);
-        qddot_result(i,j) = traj.getWayPoint(i).getVariableAcceleration(idices[j]);
+        q_result    (i, current_seg_index + j) = traj.getWayPoint(i).getVariablePosition(idices[j]);
+        qdot_result (i, current_seg_index + j) = traj.getWayPoint(i).getVariableVelocity(idices[j]);
+        qddot_result(i, current_seg_index + j) = traj.getWayPoint(i).getVariableAcceleration(idices[j]);
       }
       time_result(i) = traj.getWayPointDurationFromStart(i);
     }
     current_seg_index += dof;
-  }  
+  }
   return true;
 }
 

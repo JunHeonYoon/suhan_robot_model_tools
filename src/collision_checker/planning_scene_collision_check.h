@@ -3,13 +3,13 @@
 #include <mutex>
 
 // MoveIt
-#include <moveit/robot_model_loader/robot_model_loader.h>
-#include <moveit/planning_scene/planning_scene.h>
-#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
-#include <moveit/kinematic_constraints/utils.h>
-#include <moveit/robot_trajectory/robot_trajectory.h>
-#include <moveit/trajectory_processing/iterative_spline_parameterization.h>
-#include <moveit/trajectory_processing/iterative_time_parameterization.h>
+#include <moveit/robot_model_loader/robot_model_loader.hpp>
+#include <moveit/planning_scene/planning_scene.hpp>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.hpp>
+#include <moveit/kinematic_constraints/utils.hpp>
+#include <moveit/robot_trajectory/robot_trajectory.hpp>
+// IterativeSplineParameterization was removed from moveit_core in Jazzy; vendored locally.
+#include "trajectory_processing/iterative_spline_parameterization.h"
 
 #include <geometric_shapes/shape_operations.h>
 #include <shape_msgs/msg/mesh.hpp>

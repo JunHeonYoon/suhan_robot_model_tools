@@ -1,9 +1,10 @@
-from suhan_robot_model_tools.suhan_robot_model_tools_wrapper_cpp import NameVector, IntVector, DualChainConstraintsFunctions6D, DualChainConstraintIK, OrientationConstraintFunctions, OrientationConstrainedIK, PlanningSceneCollisionCheck, isometry_to_vectors, vectors_to_isometry, MultiChainConstraintFunctions, MultiChainConstraintIK, MultiChainWithFixedOrientationConstraint, ParallelConstraint
-from moveit_ros_planning_interface._moveit_roscpp_initializer import roscpp_init
+from suhan_robot_model_tools2_wrapper_cpp import NameVector, IntVector, DualChainConstraintsFunctions6D, DualChainConstraintIK, OrientationConstraintFunctions, OrientationConstrainedIK, PlanningSceneCollisionCheck, isometry_to_vectors, vectors_to_isometry, MultiChainConstraintFunctions, MultiChainConstraintIK, MultiChainWithFixedOrientationConstraint, ParallelConstraint
+# NOTE: moveit_ros_planning_interface's roscpp_init python binding was removed in
+# ROS 2 Jazzy. It is not needed here: the C++ wrapper initializes rclcpp itself.
 import numpy as np
-from srmt.planning_scene import PlanningScene
-from srmt.utils import ros_init
-from srmt.utils import get_pose, get_transform
+from srmt2.planning_scene import PlanningScene
+from srmt2.utils import ros_init
+from srmt2.utils import get_pose, get_transform
 from scipy.spatial.transform import Rotation as R
 import time
 

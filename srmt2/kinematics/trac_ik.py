@@ -49,7 +49,7 @@ class TRACIK:
     
 
     def solve(self, pos, quat, q_init):
-        assert(self.tracik.get_num_joints() == len(q_init), 'q_init size mismatch')
+        assert self.tracik.get_num_joints() == len(q_init), 'q_init size mismatch'
 
         iso = vectors_to_isometry(pos, quat)
         q_res = np.zeros(self.tracik.get_num_joints())

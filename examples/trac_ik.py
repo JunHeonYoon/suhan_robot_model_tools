@@ -1,3 +1,4 @@
+from pathlib import Path
 from srmt2.planning_scene import PlanningScene
 from srmt2.planner.rrt_connect import SuhanRRTConnect
 from srmt2.kinematics import TRACIK
@@ -5,11 +6,20 @@ import numpy as np
 np.set_printoptions(precision=3)
 import time
 
-pc = PlanningScene(node_name="PlanningScene", arm_names=['fr3'], arm_dofs=[7], base_link="fr3_link0")
-# tracIK = TRACIK(base_link="fr3_link0", tip_link="fr3_hand_tcp", param_node_name="rviz2")
+script_dir = Path(__file__).resolve().parent
+robot_dir = script_dir / "robots"
+
+pc = PlanningScene(node_name="PlanningScene", 
+                   arm_names=['fr3_arm'], 
+                   hand_names=['fr3_hand'],
+                   arm_dofs=[7], 
+                   base_link="fr3_link0", 
+                   urdf_file_path=str(robot_dir / "fr3.urdf"), 
+                   srdf_file_path=str(robot_dir / "fr3.srdf"),)
+
 tracIK = TRACIK(base_link="fr3_link0", 
                 tip_link="fr3_hand_tcp", 
-                urdf_file_path="/home/yoonjunheon/ros2_ws/src/husky_fr3_ros2/husky_fr3_description/urdf/husky_fr3.urdf")
+                urdf_file_path=str(robot_dir / "fr3.urdf"))
 
 q_ready = np.array([0,0,0,-np.pi/2,0,np.pi/2,np.pi/4])
 joint_upper_limit = tracIK.get_upper_bound()
@@ -30,6 +40,7 @@ for _ in range(100):
         print(q_goal)
         if pc.is_valid(q_goal):
             print("IK solution is valid")
+            break
         else:
             print('fr3 is in collision')
             r = False
@@ -51,7 +62,7 @@ if r:
             # ------------'
             traj_q, traj_qdot, traj_qddot, traj_time = pc.time_parameterize(path, max_velocity_scaling_factor=1.0, max_acceleration_scaling_factor=1.0)
             pc.display(traj_q[0])
-            for i in range(1, len(traj_q)-1):
+            for i in range(1, len(traj_q)):
                 time.sleep(traj_time[i] - traj_time[i-1])
                 pc.display(traj_q[i])
             # ------------

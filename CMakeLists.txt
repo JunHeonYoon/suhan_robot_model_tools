@@ -65,6 +65,7 @@ add_library(suhan_robot_model_tools2 SHARED
   src/trac_ik_adapter/trac_ik_adapter.cpp
   src/eigen_tools/eigen_tools.cpp
   src/collision_checker/planning_scene_collision_check.cpp
+  src/trajectory_processing/iterative_spline_parameterization.cpp
   src/constraints/kinematics_constraint_functions.cpp
   src/constraints/dual_chain_constraint_functions.cpp
   src/constraints/multi_chain_constraint_functions.cpp

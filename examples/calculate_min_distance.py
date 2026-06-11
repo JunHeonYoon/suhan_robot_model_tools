@@ -1,7 +1,11 @@
 from srmt2.planning_scene import PlanningScene
 import numpy as np
+from pathlib import Path
 import time
 np.set_printoptions(precision=4, suppress=True, linewidth=300)
+
+script_dir = Path(__file__).resolve().parent
+robot_dir = script_dir / "robots"
 
 joint_limit = np.array([[-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973],  # min
                             [ 2.8973, 1.7628, 2.8973,-0.0698, 2.8973, 3.7525, 2.8973]]) # max
@@ -19,10 +23,11 @@ links = ["fr3_link0",
 # pc = PlanningScene(node_name="PlanningScene", arm_names=['fr3'], arm_dofs=[7], base_link="base_link")
 pc = PlanningScene(node_name="PlanningScene", 
                    arm_names=['fr3_arm'], 
+                   hand_names=['fr3_hand'],
                    arm_dofs=[7], 
                    base_link="fr3_link0", 
-                   urdf_file_path="/home/yoonjunheon/ros2_ws/src/fr3_moveit_config/config/fr3.urdf", 
-                   srdf_file_path="/home/yoonjunheon/ros2_ws/src/fr3_moveit_config/config/fr3.srdf",)
+                   urdf_file_path=str(robot_dir / "fr3.urdf"), 
+                   srdf_file_path=str(robot_dir / "fr3.srdf"),)
 pc.add_box('abcd', [.1,0.1,0.5], [-0.3,-0.1,0.1], [0.0,0.0,0.0,1.0])
 pc.add_box('abcd2', [0.2,0.5,0.1], [0.2,0.1,0.1], [0.0,0.0,0.0,1.0])
     

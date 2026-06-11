@@ -1,15 +1,19 @@
 from srmt2.planning_scene import PlanningScene, VisualSimulator
 import numpy as np
 import time
+from pathlib import Path
 
+script_dir = Path(__file__).resolve().parent
+robot_dir = script_dir / "robots"
 
 # pc = PlanningScene(node_name="PlanningScene", arm_names=['fr3'], arm_dofs=[7], base_link="base_link")
 pc = PlanningScene(node_name="PlanningScene", 
                    arm_names=['fr3_arm'], 
+                   hand_names=['fr3_hand'],
                    arm_dofs=[7], 
                    base_link="fr3_link0", 
-                   urdf_file_path="/home/yoonjunheon/ros2_ws/src/fr3_moveit_config/config/fr3.urdf", 
-                   srdf_file_path="/home/yoonjunheon/ros2_ws/src/fr3_moveit_config/config/fr3.srdf",)
+                   urdf_file_path=str(robot_dir / "fr3.urdf"), 
+                   srdf_file_path=str(robot_dir / "fr3.srdf"),)
 pc.add_box('abcd', [.1,0.1,0.5], [-0.3,-0.1,0.1], [0.0,0.0,0.0,1.0])
 pc.add_box('abcd2', [0.2,0.5,0.1], [0.2,0.1,0.1], [0.0,0.0,0.0,1.0])
     
